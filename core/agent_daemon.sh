@@ -24,8 +24,15 @@ if pgrep -f "webhook.py $AGENT_PORT" > /dev/null; then
     exit 0
 fi
 
-# 1. 获取本机原生公网 IPv4 (强制去除所有不可见换行符和空格)
-AGENT_IP=$(curl -4 -s -m 5 api.ip.sb/ip | tr -d '[:space:]')
+# 1. [v3.0.1修复] 严格按照 install.sh 锁定的网络协议 (v4/v6) 获取 IP
+RAW_IP=$(curl -${IP_PREF:-4} -s -m 5 api.ip.sb/ip | tr -d '[:space:]')
+
+# 为新获取到的 v6 自动加方括号，以确保与之前锁定的格式对齐比对
+if [[ "$RAW_IP" == *":"* ]] && [[ "$RAW_IP" != *"["* ]]; then
+    AGENT_IP="[${RAW_IP}]"
+else
+    AGENT_IP="$RAW_IP"
+fi
 
 if [ -n "$AGENT_IP" ]; then
     # --- [重点升级 2: 智能防打扰注册机制] ---
@@ -120,8 +127,14 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+import socket
+# [v3.0.1修复] 自定义支持双栈/IPv6的 Server 类
+class DualStackServer(socketserver.TCPServer):
+    address_family = socket.AF_INET6 if socket.has_ipv6 else socket.AF_INET
+
 try:
-    with socketserver.TCPServer(("", PORT), AgentHandler) as httpd:
+    bind_addr = "::" if socket.has_ipv6 else ""
+    with DualStackServer((bind_addr, PORT), AgentHandler) as httpd:
         httpd.serve_forever()
 except Exception as e:
     sys.exit(1)
