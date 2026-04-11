@@ -78,6 +78,15 @@ bash /opt/ip_sentinel/core/uninstall.sh
 
 ```
 
+## 🧓 传家宝老旧系统专用通道 (Debian 9)
+
+如果你的小鸡系统版本过低（如 Debian 9），由于官方 APT 源已关闭且 Python 版本过旧，无法使用主线版本，请使用 **Legacy 兼容分支** 部署。
+*(注意：该分支仅作基础维护，不享受新功能迭代，请尽可能升级你的系统)*
+
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/hotyue/IP-Sentinel/legacy/core/install.sh)
+```
+
 📡 战术联络 (Community)
 如果你在使用过程中遇到任何疑难杂症，或者想围观大佬们的养护战报，欢迎加入我们的基地：
 - Telegram 频道: [@IP_Sentinel_Matrix](https://t.me/IP_Sentinel_Matrix)
