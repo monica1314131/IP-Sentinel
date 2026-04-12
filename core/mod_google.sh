@@ -85,6 +85,16 @@ log "$MODULE_NAME" "INFO " "当前出网 IP: $CURRENT_IP"
 log "$MODULE_NAME" "INFO " "设备指纹锁定: ${SESSION_UA:0:45}..."
 log "$MODULE_NAME" "INFO " "虚拟驻留坐标: $SESSION_BASE_LAT, $SESSION_BASE_LON"
 
+# -----------------------------------------------------------
+# [V3.2.1 热修复] 网络锚定参数构建 
+# 强制 curl 绑定指定网卡/隧道 IP 出网，防止流量溢出至默认路由
+# -----------------------------------------------------------
+CURL_BIND_OPT=""
+if [[ -n "$BIND_IP" && "$BIND_IP" =~ ^[0-9a-fA-F:\.]+$ ]]; then
+    CURL_BIND_OPT="--interface $BIND_IP"
+    log "$MODULE_NAME" "INFO " "底层路由锁定: 已强制绑定物理出口 IP 出网"
+fi
+
 # --- [行为循环模拟] ---
 for ((i=1; i<=TOTAL_ACTIONS; i++)); do
     # 模拟真实移动设备拿在手里时的 GPS 信号微抖动 (范围约 10 米)
@@ -98,21 +108,22 @@ for ((i=1; i<=TOTAL_ACTIONS; i++)); do
     # 随机选择一种上网行为
     ACTION_TYPE=$((1 + RANDOM % 4))
     
+    # [V3.2.1 热修复] 将 $CURL_BIND_OPT 注入所有请求
     case $ACTION_TYPE in
         1) # 搜索行为
-            CODE=$(curl -${IP_PREF:-4} -m 15 -s -L -o /dev/null -w "%{http_code}" -A "$SESSION_UA" \
+            CODE=$(curl $CURL_BIND_OPT -${IP_PREF:-4} -m 15 -s -L -o /dev/null -w "%{http_code}" -A "$SESSION_UA" \
                  "https://www.google.com/search?q=${ENCODED_KEY}&${LANG_PARAMS}")
             ;;
         2) # 浏览本土新闻
-            CODE=$(curl -${IP_PREF:-4} -m 15 -s -L -o /dev/null -w "%{http_code}" -A "$SESSION_UA" \
+            CODE=$(curl $CURL_BIND_OPT -${IP_PREF:-4} -m 15 -s -L -o /dev/null -w "%{http_code}" -A "$SESSION_UA" \
                  "https://news.google.com/home?${LANG_PARAMS}")
             ;;
         3) # 地图坐标查询
-            CODE=$(curl -${IP_PREF:-4} -m 15 -s -o /dev/null -w "%{http_code}" -A "$SESSION_UA" \
+            CODE=$(curl $CURL_BIND_OPT -${IP_PREF:-4} -m 15 -s -o /dev/null -w "%{http_code}" -A "$SESSION_UA" \
                  "https://www.google.com/maps/search/$${ENCODED_KEY}/@${ACTION_LAT},${ACTION_LON},17z?${LANG_PARAMS}")
             ;;
         4) # 触发移动端系统底层位置检测像素
-            CODE=$(curl -${IP_PREF:-4} -m 10 -s -o /dev/null -w "%{http_code}" -A "$SESSION_UA" \
+            CODE=$(curl $CURL_BIND_OPT -${IP_PREF:-4} -m 10 -s -o /dev/null -w "%{http_code}" -A "$SESSION_UA" \
                  "https://connectivitycheck.gstatic.com/generate_204")
             ;;
     esac
@@ -129,7 +140,8 @@ for ((i=1; i<=TOTAL_ACTIONS; i++)); do
 done
 
 # --- [结果纠偏自检 (V3.1.4 绝对精准提取版)] ---
-FINAL_URL=$(curl -${IP_PREF:-4} -m 15 -s -L -o /dev/null -w "%{url_effective}" https://www.google.com)
+# [V3.2.1 热修复] 同样为自检探针注入 $CURL_BIND_OPT
+FINAL_URL=$(curl $CURL_BIND_OPT -${IP_PREF:-4} -m 15 -s -L -o /dev/null -w "%{url_effective}" https://www.google.com)
 
 # 核心战术：利用 awk 精准提取最终 URL 的域名部分，再剔除 "www.google." 前缀，得到纯粹的后缀
 # 例如: https://www.google.com.hk/?... -> 提取为 "com.hk"

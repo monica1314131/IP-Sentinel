@@ -87,6 +87,16 @@ log_msg "START" "========== 启动区域 IP 信用净化会话 =========="
 log_msg "INFO " "已载入 [${REGION}] 区域白名单，配置库条目: ${#TRUST_URLS[@]} 个"
 log_msg "INFO " "已锁定本地伪装指纹: $(echo $CURRENT_UA | cut -d' ' -f1-2)..."
 
+# -----------------------------------------------------------
+# [V3.2.1 热修复] 网络锚定参数构建 
+# 强制 curl 绑定指定网卡/隧道 IP 出网，防止流量溢出至默认路由
+# -----------------------------------------------------------
+CURL_BIND_OPT=""
+if [[ -n "$BIND_IP" && "$BIND_IP" =~ ^[0-9a-fA-F:\.]+$ ]]; then
+    CURL_BIND_OPT="--interface $BIND_IP"
+    log_msg "INFO " "底层路由锁定: 已强制绑定物理出口 IP 出网"
+fi
+
 STEP_COUNT=$((RANDOM % 4 + 3))
 SUCCESS_INJECT=0
 
@@ -95,7 +105,8 @@ for ((i=1; i<=STEP_COUNT; i++)); do
     TARGET_URL=${TRUST_URLS[$RANDOM % ${#TRUST_URLS[@]}]}
     
     # [v3.0.1修复] 注入高权重流量时，强制从绑定的 IPv4 或 IPv6 隧道出网
-    HTTP_CODE=$(curl -${IP_PREF:-4} -A "$CURRENT_UA" \
+    # [V3.2.1 热修复] 注入 $CURL_BIND_OPT 确保流量强制走绑定出口
+    HTTP_CODE=$(curl $CURL_BIND_OPT -${IP_PREF:-4} -A "$CURRENT_UA" \
         -H "Accept: text/html,application/xhtml+xml;q=0.9,image/avif,image/webp,*/*;q=0.8" \
         -H "Accept-Language: en-US,en;q=0.9" \
         -H "Sec-Fetch-Dest: document" \
