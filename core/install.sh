@@ -388,6 +388,45 @@ EOF
 fi
 # 🛑 拦截块结束 (全套交互配置跳过完毕)
 
+# ================== [v3.3.1 核心修复: 老节点配置无损热迁移] ==================
+if [ "$UPGRADE_MODE" == "true" ]; then
+    if ! grep -q "PUBLIC_IP=" "$CONFIG_FILE"; then
+        echo -e "\n🔄 [平滑迁移] 正在对老节点进行 v3.3.1 双核身份架构升级..."
+        
+        # 重新抓取公网面孔 (应对老节点 BIND_IP 可能已被手动清空的情况)
+        MIGRATE_IP=$(curl -${IP_PREF:-4} -s -m 5 api.ip.sb/ip | tr -d '[:space:]')
+        [[ "$MIGRATE_IP" == *":"* ]] && [[ "$MIGRATE_IP" != *"["* ]] && MIGRATE_IP="[${MIGRATE_IP}]"
+        
+        echo -n "🕵️ 正在进行补发链路试射 (NAT与双栈嗅探)..."
+        RAW_TEST_IP=$(echo "$MIGRATE_IP" | tr -d '[]')
+        if [[ "$RAW_TEST_IP" == *":"* ]]; then
+            TEST_TARGET="https://[2606:4700:4700::1111]"
+        else
+            TEST_TARGET="https://1.1.1.1"
+        fi
+        
+        if curl --interface "$RAW_TEST_IP" -sI -m 3 "$TEST_TARGET" >/dev/null 2>&1; then
+            echo -e " \033[32m✅ 原生直连，网卡死锁已继承。\033[0m"
+            NEW_BIND_IP="$MIGRATE_IP"
+        else
+            echo -e " \033[33m⚠️ 发现 NAT 架构，已自动卸除老版本的物理枷锁。\033[0m"
+            NEW_BIND_IP=""
+        fi
+        
+        # 动态修改旧配置文件 (更新 BIND_IP，追加 PUBLIC_IP)
+        sed -i "s/^BIND_IP=.*/BIND_IP=\"$NEW_BIND_IP\"/" "$CONFIG_FILE"
+        echo "PUBLIC_IP=\"$MIGRATE_IP\"" >> "$CONFIG_FILE"
+        
+        # 刷新当前安装脚本的环境变量，防止底部代码报错
+        SAFE_PUBLIC_IP="$MIGRATE_IP"
+        BIND_IP="$NEW_BIND_IP"
+    else
+        # 如果是未来再升级，配置文件已是最新，直接提取变量供安装脚本尾部使用
+        SAFE_PUBLIC_IP=$(grep "^PUBLIC_IP=" "$CONFIG_FILE" | cut -d'"' -f2)
+    fi
+fi
+# ========================================================================
+
 # 6. 拉取全套组件 (按需下载，绝不浪费空间)
 echo -e "\n[6/7] 正在根据模块开关部署核心引擎与热数据..."
 # 确保目录在升级模式下也能被正确建立
