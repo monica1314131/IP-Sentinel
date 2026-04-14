@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================================
-# 脚本名称: install.sh (IP-Sentinel 分布式边缘节点部署脚本 v3.3.1 - OTA 活体引擎)
+# 脚本名称: install.sh (IP-Sentinel 分布式边缘节点部署脚本 v3.3.2 - OTA 活体引擎)
 # 核心功能: 区域选择、模块按需开启、官方机器人一键配置、平滑热更新、分频错峰调度
 # ==========================================================
 
@@ -494,7 +494,9 @@ rm -f /tmp/cron_backup
 
 # ================== [v3.2.2 优化: 战报通知分流 (注册/升级)] ==================
 if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
-    NODE_NAME=$(hostname | cut -c 1-15)
+    # [v3.3.2 修复: 引入 IP 哈希防同名覆盖机制]
+    IP_HASH=$(echo "${SAFE_PUBLIC_IP:-127.0.0.1}" | md5sum | cut -c 1-4 | tr 'a-z' 'A-Z')
+    NODE_NAME="$(hostname | cut -c 1-10)_${IP_HASH}"
     
     if [ "$UPGRADE_MODE" == "true" ]; then
         echo -e "\n📡 正在向指挥部发送升级成功战报..."
@@ -504,7 +506,7 @@ if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
             -d "text=✨ *IP-Sentinel 引擎热更新完成！*
 📍 节点：\`${NODE_NAME}\`
 🌐 IP：\`${SAFE_PUBLIC_IP}\`
-🚀 状态：v3.3.1 OTA 动态活体养护引擎已部署" >/dev/null 2>&1
+🚀 状态：v3.3.2 OTA 动态活体养护引擎已部署" >/dev/null 2>&1
         echo -e "\033[32m✅ 升级成功通知已推送到您的 Telegram！\033[0m"
     else
         echo -e "\n📡 正在向指挥部发送注册暗号..."
