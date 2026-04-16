@@ -334,11 +334,11 @@ while true; do
                     if [ -n "$AGENT_IP" ] && [ -n "$AGENT_PORT" ]; then
                         send_msg "$CHAT_ID" "⏳ 正在向 \`$TARGET_NODE\` 下发重命名指令，正在建立加密隧道..."
                         
-                        # 安全 URL 编码，防止中文在 URL 传输中损坏
-                        ENCODED_ALIAS=$(jq -rn --arg x "$NEW_ALIAS" '$x|@uri' 2>/dev/null)
-                        
                         TARGET_URL=$(generate_signed_url "$AGENT_IP" "$AGENT_PORT" "/trigger_rename")
-                        TARGET_URL="${TARGET_URL}&alias=${ENCODED_ALIAS}"
+                        
+                        # [绝密防线: Base64 编码绕过一切传输限制与 WAF 拦截]
+                        ALIAS_B64=$(echo -n "$NEW_ALIAS" | base64 | tr -d '\n' | tr '+/' '-_')
+                        TARGET_URL="${TARGET_URL}&b64=${ALIAS_B64}"
                         
                         RESPONSE=$(curl -s -m 5 "$TARGET_URL" || echo "FAILED")
                         
@@ -347,7 +347,8 @@ while true; do
                         elif [[ "$RESPONSE" == *"Action Accepted"* ]]; then
                             send_msg "$CHAT_ID" "✅ 通讯成功！节点别名已下发: \`$NEW_ALIAS\`\n*(注: 节点随后将自动向中枢报备刷新面板)*"
                         else
-                            send_msg "$CHAT_ID" "⚠️ 节点拒绝了请求，请确保该节点的 Agent 已经更新至 v3.5.2"
+                            # 增加输出 RESPONSE 调试信息，排查任何拦截死因
+                            send_msg "$CHAT_ID" "⚠️ 节点拒绝了请求，请确保 Agent 已更新至 v3.5.2\n(回传信息: \`${RESPONSE}\`)"
                         fi
                     else
                         send_msg "$CHAT_ID" "❌ 数据库中未找到该节点的通讯地址。"
