@@ -147,7 +147,7 @@ while true; do
 
                 # [核心] 入库时追加 node_alias 字段
                 db_exec "INSERT INTO nodes (chat_id, node_name, agent_ip, agent_port, last_seen, region, node_alias) VALUES ('$CHAT_ID', '$NODE_NAME', '$AGENT_IP', '$AGENT_PORT', CURRENT_TIMESTAMP, '$AGENT_REGION', '$NODE_ALIAS') ON CONFLICT(chat_id, node_name) DO UPDATE SET agent_ip='$AGENT_IP', agent_port='$AGENT_PORT', last_seen=CURRENT_TIMESTAMP, region='$AGENT_REGION', node_alias='$NODE_ALIAS';"
-                send_msg "$CHAT_ID" "✅ **司令部确认 (v${MASTER_VERSION})**\n节点 \`${NODE_ALIAS}\` 档案已录入！"
+                send_msg "$CHAT_ID" "✅ **司令部确认 (v${MASTER_VERSION})**%0A节点 \`${NODE_ALIAS}\` 档案已录入！"
                 
                 # ================== [v3.1.3 丝滑连招: 直接呼出全球大区雷达] ==================
                 REGION_DATA=$(db_exec "SELECT region, COUNT(*) FROM nodes WHERE chat_id='$CHAT_ID' GROUP BY region;")
@@ -350,10 +350,10 @@ while true; do
                         elif [[ "$RESPONSE" == *"Action Accepted"* ]]; then
                             # [v3.5.2 极致丝滑] 确认 Agent 修改成功后，Master 立即自动同步本地 SQLite 数据库！
                             db_exec "UPDATE nodes SET node_alias='$NEW_ALIAS' WHERE chat_id='$CHAT_ID' AND node_name='$TARGET_NODE';"
-                            send_msg "$CHAT_ID" "✅ 通讯成功！节点别名已下发: \`$NEW_ALIAS\`\n*(司令部档案已自动刷新，雷达面板已同步)*"
+                            send_msg "$CHAT_ID" "✅ 通讯成功！节点别名已下发: \`$NEW_ALIAS\`%0A*(司令部档案已自动刷新，雷达面板已同步)*"
                         else
                             # 增加输出 RESPONSE 调试信息，排查任何拦截死因
-                            send_msg "$CHAT_ID" "⚠️ 节点拒绝了请求，请确保 Agent 已更新至 v3.5.2\n(回传信息: \`${RESPONSE}\`)"
+                            send_msg "$CHAT_ID" "⚠️ 节点拒绝了请求，请确保 Agent 已更新至 v3.5.2%0A(回传信息: \`${RESPONSE}\`)"
                         fi
                     else
                         send_msg "$CHAT_ID" "❌ 数据库中未找到该节点的通讯地址。"
