@@ -102,45 +102,56 @@ if [ ! -s "/tmp/map.json" ]; then
     exit 1
 fi
 
-echo -e "\n请选择操作:"
-echo "  1) 🚀 部署边缘节点 (进入全球节点配置)"
-echo "  2) 🗑️ 一键卸载 IP-Sentinel"
-read -p "请输入选择 [1-2] (默认1): " ACTION_CHOICE
+# ==========================================================
+# [v3.6.0 核心] 拦截静默 OTA 升级模式 (强行接管执行流，跳过人工交互)
+# ==========================================================
+if [ "$SILENT_OTA" == "true" ]; then
+    echo -e "\n⏳ [OTA] 静默升级指令已确认，正在剥离控制台交互..."
+    ACTION_CHOICE=1
+    UPGRADE_MODE="true"
+    KEEP_LOGS="true"
+    source "$CONFIG_FILE"
+else
+    echo -e "\n请选择操作:"
+    echo "  1) 🚀 部署边缘节点 (进入全球节点配置)"
+    echo "  2) 🗑️ 一键卸载 IP-Sentinel"
+    read -p "请输入选择 [1-2] (默认1): " ACTION_CHOICE
 
-# [v3.5.2 修复] 防止用户直接回车导致变量为空，从而漏过下方的平滑升级判定
-ACTION_CHOICE=${ACTION_CHOICE:-1}
+    # [v3.5.2 修复] 防止用户直接回车导致变量为空，从而漏过下方的平滑升级判定
+    ACTION_CHOICE=${ACTION_CHOICE:-1}
 
-if [ "$ACTION_CHOICE" == "2" ]; then
-    echo -e "\n⏳ 正在拉取卸载程序..."
-    curl -sL "${REPO_RAW_URL}/core/uninstall.sh" -o "/tmp/ip_uninstall.sh"
-    chmod +x "/tmp/ip_uninstall.sh"
-    bash "/tmp/ip_uninstall.sh"
-    rm -f "/tmp/ip_uninstall.sh"
-    exit 0
-fi
-
-# ================== [v3.2.2 新增: 平滑升级模式嗅探] ==================
-UPGRADE_MODE="false"
-KEEP_LOGS="true"
-
-if [ "$ACTION_CHOICE" == "1" ] && [ -f "$CONFIG_FILE" ]; then
-    echo -e "\n\033[33m💡 哨兵雷达提示：检测到本机已部署过 IP-Sentinel。\033[0m"
-    read -p "👉 是否按原配置直接进行平滑升级？(y/n, 默认y): " UPGRADE_CHOICE
-    if [[ -z "$UPGRADE_CHOICE" || "$UPGRADE_CHOICE" =~ ^[Yy]$ ]]; then
-        UPGRADE_MODE="true"
-        read -p "👉 是否保留历史运行日志？(y/n, 默认y): " LOG_CHOICE
-        if [[ "$LOG_CHOICE" =~ ^[Nn]$ ]]; then
-            KEEP_LOGS="false"
-        fi
-        
-        # 将原配置读入环境变量，为后续跳过配置步骤提供燃料
-        source "$CONFIG_FILE"
-        echo -e "\033[32m✅ 已激活 [平滑升级模式]，即将跳过基础配置，直接更新核心装甲...\033[0m"
-    else
-        echo -e "\033[33m🔄 您选择了重新配置，旧的哨兵数据将被彻底抹除。\033[0m"
+    if [ "$ACTION_CHOICE" == "2" ]; then
+        echo -e "\n⏳ 正在拉取卸载程序..."
+        curl -sL "${REPO_RAW_URL}/core/uninstall.sh" -o "/tmp/ip_uninstall.sh"
+        chmod +x "/tmp/ip_uninstall.sh"
+        bash "/tmp/ip_uninstall.sh"
+        rm -f "/tmp/ip_uninstall.sh"
+        exit 0
     fi
+
+    # ================== [v3.2.2 新增: 平滑升级模式嗅探] ==================
+    UPGRADE_MODE="false"
+    KEEP_LOGS="true"
+
+    if [ "$ACTION_CHOICE" == "1" ] && [ -f "$CONFIG_FILE" ]; then
+        echo -e "\n\033[33m💡 哨兵雷达提示：检测到本机已部署过 IP-Sentinel。\033[0m"
+        read -p "👉 是否按原配置直接进行平滑升级？(y/n, 默认y): " UPGRADE_CHOICE
+        if [[ -z "$UPGRADE_CHOICE" || "$UPGRADE_CHOICE" =~ ^[Yy]$ ]]; then
+            UPGRADE_MODE="true"
+            read -p "👉 是否保留历史运行日志？(y/n, 默认y): " LOG_CHOICE
+            if [[ "$LOG_CHOICE" =~ ^[Nn]$ ]]; then
+                KEEP_LOGS="false"
+            fi
+            
+            # 将原配置读入环境变量，为后续跳过配置步骤提供燃料
+            source "$CONFIG_FILE"
+            echo -e "\033[32m✅ 已激活 [平滑升级模式]，即将跳过基础配置，直接更新核心装甲...\033[0m"
+        else
+            echo -e "\033[33m🔄 您选择了重新配置，旧的哨兵数据将被彻底抹除。\033[0m"
+        fi
+    fi
+    # ====================================================================
 fi
-# ====================================================================
 
 # ================== [v3.1.1/v3.2.2 优化: 安装前环境纯净度清理] ==================
 echo -e "\n⏳ 正在清理旧版守护进程与冗余任务..."
@@ -279,8 +290,13 @@ if [ "$UPGRADE_MODE" == "false" ]; then
         if [ "$MASTER_TYPE" == "2" ]; then
             TG_TOKEN="OFFICIAL_GATEWAY_MODE" 
             TG_API_URL="https://omni-gateway.samanthaestime296.workers.dev" 
+            ENABLE_OTA="false"
             echo -e "\033[32m✅ 已自动连接官方安全网关 (@OmniBeacon_bot)。\033[0m"
             echo -e "\033[33m👉 请确保您已在 TG 中关注官方机器人并发送过 /start，否则将无法接收消息。\033[0m"
+            # [v3.6.0 安全熔断]
+            echo -e "\n\033[33m⚠️ 【安全熔断提示】\033[0m"
+            echo -e "\033[33m由于您使用了官方公共网关，为防止潜在的滥用或供应链风险，本节点的 [OTA 远程升级] 权限已被系统底层强制禁用。\033[0m"
+            echo -e "\033[33m💡 若未来需要启用 OTA，请自建私有中枢后重新部署本节点。\033[0m"
         else
             echo -e "\n\033[36m📘 私有 Bot 创建教程: https://blog.iot-architect.com/engineering-practice/create-private-telegram-bot-via-botfather/\033[0m"
             read -p "请输入您的私有 Telegram Bot Token: " USER_TOKEN
@@ -293,6 +309,18 @@ if [ "$UPGRADE_MODE" == "false" ]; then
             TG_TOKEN="$USER_TOKEN"
             TG_API_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
             echo -e "\033[32m✅ 已记录您的私有机器人 Token。\033[0m"
+            
+            # [v3.6.0] 私有模式开放 OTA 授权向导
+            echo -e "\n\033[36m[4.1/7] OTA 远程静默升级授权\033[0m"
+            echo -e "💡 开启后，您可以在 TG 面板一键将本节点热更新至最新版本。"
+            read -p "是否允许本节点接收 OTA 升级指令？(y/n, 默认y): " OTA_CHOICE
+            if [[ "$OTA_CHOICE" =~ ^[Nn]$ ]]; then
+                ENABLE_OTA="false"
+                echo -e "🛡️ \033[33m已关闭 OTA 权限，本节点未来将只能通过 SSH 手动升级。\033[0m"
+            else
+                ENABLE_OTA="true"
+                echo -e "✅ \033[32m已开启 OTA 权限，核按钮已挂载至您的私有中枢。\033[0m"
+            fi
         fi
 
         echo -e "\n\033[33m💡 提示：如果您不知道下方自己的 Chat ID 是什么，可以关注 @userinfobot 获取。\033[0m"
@@ -483,6 +511,9 @@ BIND_IP="$BIND_IP"
 # [v3.5.2新增: 双轨身份系统]
 NODE_NAME="$NODE_NAME"
 NODE_ALIAS="$NODE_ALIAS"
+
+# [v3.6.0新增: OTA 权限标识]
+ENABLE_OTA="$ENABLE_OTA"
 EOF
 
     # ================== [v3.0.3 变更: 敏感配置文件权限收敛] ==================
@@ -543,6 +574,14 @@ if [ "$UPGRADE_MODE" == "true" ]; then
             NODE_ALIAS="$NODE_NAME"
             echo "NODE_ALIAS=\"$NODE_ALIAS\"" >> "$CONFIG_FILE"
         fi
+    fi
+
+    # [v3.6.0 热修复] 兼容老版本没有 ENABLE_OTA 的情况，无损补齐默认关闭以防滥用
+    if ! grep -q "^ENABLE_OTA=" "$CONFIG_FILE"; then
+        echo "ENABLE_OTA=\"false\"" >> "$CONFIG_FILE"
+        ENABLE_OTA="false"
+    else
+        ENABLE_OTA=$(grep "^ENABLE_OTA=" "$CONFIG_FILE" | cut -d'"' -f2)
     fi
 fi
 # ========================================================================
@@ -615,8 +654,8 @@ rm -f /tmp/cron_backup
 # ================== [v3.4.0 核心: 状态机驱动的热更新路由] ==================
 if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
     
-    # [v3.5.2 核心] 发送携带双轨身份的注册指令 (追加 NODE_ALIAS 作为第 6 个字段)
-    REG_MSG="#REGISTER#|${REGION_CODE}|${NODE_NAME}|${SAFE_PUBLIC_IP}|${AGENT_PORT}|${NODE_ALIAS}"
+    # [v3.6.0 核心] 发送携带全套身份属性的注册指令 (追加 ENABLE_OTA 作为第 7 个字段)
+    REG_MSG="#REGISTER#|${REGION_CODE}|${NODE_NAME}|${SAFE_PUBLIC_IP}|${AGENT_PORT}|${NODE_ALIAS}|${ENABLE_OTA}"
     
     if [ "$UPGRADE_MODE" == "true" ]; then
         # 读取本地老版本号，如果没有则视为远古版本 v3.3.1
