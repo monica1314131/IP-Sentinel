@@ -316,10 +316,11 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Content-type", "text/plain")
                 self.end_headers()
                 self.wfile.write(b"Action Accepted: trigger_upgrade\n")
+                self.wfile.flush() # [修复 1] 强制刷新 TCP 缓冲区，立刻把成功回执发给 Master
                 
-                # 注入静默环境变量，触发极其极客的无状态管道升级，瞬间重载
-                cmd = "export SILENT_OTA=true && curl -sL https://raw.githubusercontent.com/hotyue/IP-Sentinel/main/core/install.sh | bash"
-                subprocess.Popen(cmd, shell=True, executable='/bin/bash')
+                # [修复 2] 采用 nohup 剥离进程，并延迟 3 秒再执行，防止 install.sh 一启动就把 Webhook 自己秒杀了
+                cmd = "nohup bash -c 'sleep 3 && export SILENT_OTA=true && curl -sL https://raw.githubusercontent.com/hotyue/IP-Sentinel/main/core/install.sh | bash' >/dev/null 2>&1 &"
+                subprocess.Popen(cmd, shell=True, close_fds=True)
             except Exception as e:
                 self.send_response(500)
                 self.end_headers()
