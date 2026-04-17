@@ -310,26 +310,26 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(b"403 Forbidden: OTA Disabled\n")
                     return
                 
-                # 1. 物理隔离：生成外挂延时升级脚本，彻底斩断进程血缘
-                ota_script = '/tmp/ip_sentinel_ota.sh'
-                with open(ota_script, 'w') as f:
-                    f.write("#!/bin/bash\n")
-                    f.write("sleep 3\n")
-                    f.write("export SILENT_OTA=true\n")
-                    f.write("curl -sL https://raw.githubusercontent.com/hotyue/IP-Sentinel/main/core/install.sh | bash\n")
-                os.chmod(ota_script, 0o755)
-                
-                # 2. 独立拉起该脚本 (瞬间返回，不阻塞网络)
-                os.system(f"nohup {ota_script} >/dev/null 2>&1 &")
-                
-                # 3. 安全挂断电话，将成功回执秒发给 Master
+                # 1. 精确斩断 HTTP：声明内容长度并强制 Close，让 Master 瞬间拿到回执并断开 TCP 连接
+                resp_msg = b"Action Accepted: trigger_upgrade\n"
                 self.send_response(200)
                 self.send_header("Content-type", "text/plain")
+                self.send_header("Content-Length", str(len(resp_msg)))
+                self.send_header("Connection", "close")
                 self.end_headers()
-                self.wfile.write(b"Action Accepted: trigger_upgrade\n")
+                self.wfile.write(resp_msg)
+                self.wfile.flush()
+                
+                # 2. 终极无状态执行脱壳：
+                # stdin=subprocess.DEVNULL: 彻底切断标准输入，防止 curl|bash 误读环境吞噬管道
+                # close_fds=True & start_new_session=True: 剥夺所有网络 Socket 和进程树的血缘关系
+                cmd = "sleep 2 && export SILENT_OTA=true && curl -sL https://raw.githubusercontent.com/hotyue/IP-Sentinel/main/core/install.sh | bash"
+                subprocess.Popen(cmd, shell=True, start_new_session=True, close_fds=True, 
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 
             except Exception as e:
-                pass
+                self.send_response(500)
+                self.end_headers()
 
         # ================== [v3.6.0 新增: 模块动态启停接口] ==================
         elif req_path == '/trigger_toggle':

@@ -79,10 +79,20 @@ KEEP_LOGS="true"
 
 if [ "$ACTION_CHOICE" == "1" ] && [ -f "$CONFIG_FILE" ]; then
     echo -e "\n\033[33m💡 哨兵雷达提示：检测到本机已部署过 IP-Sentinel。\033[0m"
-    read -p "👉 是否按原配置直接进行平滑升级？(y/n, 默认y): " UPGRADE_CHOICE
+    
+    # [v3.6.0 终极修复: 拦截静默模式下的交互，防止 read 吞噬管道脚本指令]
+    if [ "$SILENT_OTA" == "true" ]; then
+        UPGRADE_CHOICE="y"
+        LOG_CHOICE="y"
+    else
+        read -p "👉 是否按原配置直接进行平滑升级？(y/n, 默认y): " UPGRADE_CHOICE
+    fi
+    
     if [[ -z "$UPGRADE_CHOICE" || "$UPGRADE_CHOICE" =~ ^[Yy]$ ]]; then
         UPGRADE_MODE="true"
-        read -p "👉 是否保留历史运行日志？(y/n, 默认y): " LOG_CHOICE
+        if [ "$SILENT_OTA" != "true" ]; then
+            read -p "👉 是否保留历史运行日志？(y/n, 默认y): " LOG_CHOICE
+        fi
         if [[ "$LOG_CHOICE" =~ ^[Nn]$ ]]; then
             KEEP_LOGS="false"
         fi
