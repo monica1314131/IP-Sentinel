@@ -67,12 +67,13 @@ generate_signed_url() {
 }
 # ========================================================================
 
-# ================== [v3.1.3/v3.5.3 核心: 数据库结构无损热升级] ==================
+# ================== [v3.1.3-v3.6.0 核心: 数据库结构无损热升级] ==================
 # 自动探测并增加缺失字段，屏蔽已存在的报错，保护老节点数据
 db_exec "ALTER TABLE nodes ADD COLUMN region TEXT DEFAULT 'UNKNOWN';" 2>/dev/null
 db_exec "ALTER TABLE nodes ADD COLUMN node_alias TEXT;" 2>/dev/null
 db_exec "ALTER TABLE nodes ADD COLUMN enable_google TEXT DEFAULT 'true';" 2>/dev/null
 db_exec "ALTER TABLE nodes ADD COLUMN enable_trust TEXT DEFAULT 'true';" 2>/dev/null
+db_exec "ALTER TABLE nodes ADD COLUMN enable_ota TEXT DEFAULT 'false';" 2>/dev/null
 # ========================================================================
 
 # --- 核心轮询循环 ---
@@ -122,17 +123,22 @@ while true; do
             if [[ "$TEXT" == *"#REGISTER#"* ]]; then
                 REG_LINE=$(echo "$TEXT" | grep "#REGISTER#" | head -n 1 | tr -d '\` ')
                 
-                # V3.5.2 兼容性拆包: 支持 6字段(双轨)、5字段(单轨)、4字段(远古)
+                # V3.6.0 兼容性拆包: 支持 7字段(OTA)、6字段(双轨)、5字段(单轨)、4字段(远古)
                 FIELD_COUNT=$(echo "$REG_LINE" | awk -F'|' '{print NF}')
-                if [ "$FIELD_COUNT" -ge 6 ]; then
+                if [ "$FIELD_COUNT" -ge 7 ]; then
+                    IFS='|' read -r MAGIC RAW_REGION RAW_NODE RAW_IP RAW_PORT RAW_ALIAS RAW_OTA <<< "$REG_LINE"
+                elif [ "$FIELD_COUNT" -eq 6 ]; then
                     IFS='|' read -r MAGIC RAW_REGION RAW_NODE RAW_IP RAW_PORT RAW_ALIAS <<< "$REG_LINE"
+                    RAW_OTA="false"
                 elif [ "$FIELD_COUNT" -eq 5 ]; then
                     IFS='|' read -r MAGIC RAW_REGION RAW_NODE RAW_IP RAW_PORT <<< "$REG_LINE"
                     RAW_ALIAS="$RAW_NODE"
+                    RAW_OTA="false"
                 else
                     IFS='|' read -r MAGIC RAW_NODE RAW_IP RAW_PORT <<< "$REG_LINE"
                     RAW_REGION="UNKNOWN"
                     RAW_ALIAS="$RAW_NODE"
+                    RAW_OTA="false"
                 fi
                 
                 # 🛡️ 强制字符白名单过滤：保留历史特征不变
@@ -143,6 +149,8 @@ while true; do
                 AGENT_PORT=$(echo "$RAW_PORT" | tr -cd '0-9' | cut -c 1-5)
                 NODE_ALIAS=$(echo "$RAW_ALIAS" | tr -d '"'\''\`\$\|&;<>\n\r' | cut -c 1-30)
                 [ -z "$NODE_ALIAS" ] && NODE_ALIAS="$NODE_NAME"
+                AGENT_OTA=$(echo "$RAW_OTA" | tr -cd 'a-z')
+                [ -z "$AGENT_OTA" ] && AGENT_OTA="false"
                 
                 if [[ "$AGENT_IP" =~ ^127\.|^10\.|^192\.168\.|^172\.(1[6-9]|2[0-9]|3[0-1])\.|^::1$|^localhost$ ]]; then
                     send_msg "$CHAT_ID" "⛔ **安全拦截**：禁止注册内网或回环 IP，防止 SSRF 攻击渗透。"
@@ -154,8 +162,8 @@ while true; do
                     continue
                 fi
 
-                # [核心] 入库时追加 node_alias 字段
-                db_exec "INSERT INTO nodes (chat_id, node_name, agent_ip, agent_port, last_seen, region, node_alias) VALUES ('$CHAT_ID', '$NODE_NAME', '$AGENT_IP', '$AGENT_PORT', CURRENT_TIMESTAMP, '$AGENT_REGION', '$NODE_ALIAS') ON CONFLICT(chat_id, node_name) DO UPDATE SET agent_ip='$AGENT_IP', agent_port='$AGENT_PORT', last_seen=CURRENT_TIMESTAMP, region='$AGENT_REGION', node_alias='$NODE_ALIAS';"
+                # [核心] 入库时追加 node_alias 与 enable_ota 字段
+                db_exec "INSERT INTO nodes (chat_id, node_name, agent_ip, agent_port, last_seen, region, node_alias, enable_ota) VALUES ('$CHAT_ID', '$NODE_NAME', '$AGENT_IP', '$AGENT_PORT', CURRENT_TIMESTAMP, '$AGENT_REGION', '$NODE_ALIAS', '$AGENT_OTA') ON CONFLICT(chat_id, node_name) DO UPDATE SET agent_ip='$AGENT_IP', agent_port='$AGENT_PORT', last_seen=CURRENT_TIMESTAMP, region='$AGENT_REGION', node_alias='$NODE_ALIAS', enable_ota='$AGENT_OTA';"
                 send_msg "$CHAT_ID" "✅ **司令部确认 (v${MASTER_VERSION})**%0A节点 \`${NODE_ALIAS}\` 档案已录入！"
                 
                 # ================== [v3.1.3 丝滑连招: 直接呼出全球大区雷达] ==================
@@ -193,8 +201,32 @@ while true; do
                         VER_INFO="${VER_INFO}\n✨ **发现新版本**: \`v${REMOTE_VER}\` (请尽快更新主控)"
                     fi
 
-                    BTNS="[[{\"text\":\"🖥️ 我的节点列表\",\"callback_data\":\"list_nodes\"}], [{\"text\":\"🚀 全节点日报汇总\",\"callback_data\":\"all_reports\"}], [{\"text\":\"🛠️ 全节点一键维护\",\"callback_data\":\"all_run\"}]]"
+                    if [ "$TG_TOKEN" != "OFFICIAL_GATEWAY_MODE" ]; then
+                        BTNS="[[{\"text\":\"🖥️ 我的节点列表\",\"callback_data\":\"list_nodes\"}], [{\"text\":\"🚀 全节点日报汇总\",\"callback_data\":\"all_reports\"}], [{\"text\":\"🛠️ 全节点一键维护\",\"callback_data\":\"all_run\"}], [{\"text\":\"⚠️ 全舰队 OTA 升级\",\"callback_data\":\"all_ota_confirm\"}]]"
+                    else
+                        BTNS="[[{\"text\":\"🖥️ 我的节点列表\",\"callback_data\":\"list_nodes\"}], [{\"text\":\"🚀 全节点日报汇总\",\"callback_data\":\"all_reports\"}], [{\"text\":\"🛠️ 全节点一键维护\",\"callback_data\":\"all_run\"}]]"
+                    fi
                     send_ui "$CHAT_ID" "🛡️ **IP-Sentinel 司令部**\n${VER_INFO}\n\n欢迎回来，长官。请下达指令：" "$BTNS"
+                    ;;
+                    
+                "all_ota_confirm")
+                    CONFIRM_BTNS="[[{\"text\":\"🚨 我已了解风险，下发核按钮指令！\",\"callback_data\":\"all_ota_execute\"}], [{\"text\":\"取消操作\",\"callback_data\":\"/start\"}]]"
+                    WARNING_MSG="☢️ **【最高指令：全舰队 OTA 升级】**\n\n此操作将向您名下**所有开启 OTA 权限的节点**下发重组指令，强制从云端拉取最新代码并进行热重载。\n\n⚠️ **核按钮风险提示**：\n1. 升级过程中守护进程会短暂重启，节点可能出现临时离线。\n2. 若遇 GitHub 源屏蔽或网络极度恶劣，少数节点可能需要手动干预。\n\n**是否确定挂载并执行 OTA 指令？**"
+                    send_ui "$CHAT_ID" "$WARNING_MSG" "$CONFIRM_BTNS"
+                    ;;
+
+                "all_ota_execute")
+                    NODE_DATA=$(db_exec "SELECT node_name, agent_ip, agent_port FROM nodes WHERE chat_id='$CHAT_ID' AND enable_ota='true';")
+                    if [ -z "$NODE_DATA" ]; then
+                        send_msg "$CHAT_ID" "⚠️ 您名下暂无开启 OTA 权限的在线节点。"
+                    else
+                        send_msg "$CHAT_ID" "📢 **司令部指令下达：正在唤醒全舰队执行 OTA 升级...**\n*(节点升级成功后会主动发回新的入库确认，请注意查收)*"
+                        echo "$NODE_DATA" | while IFS='|' read -r NNAME AIP APORT; do
+                            TARGET_URL=$(generate_signed_url "$AIP" "$APORT" "/trigger_ota")
+                            curl -s -m 5 "$TARGET_URL" > /dev/null &
+                            sleep 0.3  # 严格流量削峰
+                        done
+                    fi
                     ;;
 
                 "all_reports")
@@ -305,16 +337,22 @@ while true; do
                     TARGET_ALIAS=$(db_exec "SELECT IFNULL(node_alias, node_name) FROM nodes WHERE chat_id='$CHAT_ID' AND node_name='$TARGET_NODE' LIMIT 1;")
                     [ -z "$TARGET_ALIAS" ] && TARGET_ALIAS="$TARGET_NODE"
                     
-                    # 抓取当前节点的开关状态
-                    TOGGLE_INFO=$(db_exec "SELECT enable_google, enable_trust FROM nodes WHERE chat_id='$CHAT_ID' AND node_name='$TARGET_NODE' LIMIT 1;")
+                    # 抓取当前节点的开关状态 (追加 enable_ota)
+                    TOGGLE_INFO=$(db_exec "SELECT enable_google, enable_trust, enable_ota FROM nodes WHERE chat_id='$CHAT_ID' AND node_name='$TARGET_NODE' LIMIT 1;")
                     ST_GOOGLE=$(echo "$TOGGLE_INFO" | cut -d'|' -f1)
                     ST_TRUST=$(echo "$TOGGLE_INFO" | cut -d'|' -f2)
+                    ST_OTA=$(echo "$TOGGLE_INFO" | cut -d'|' -f3)
                     
                     # 动态渲染状态机红绿灯 UI
                     [ "$ST_GOOGLE" == "true" ] && BTN_G="🔴 停用 Google 纠偏" && ACT_G="false" || { BTN_G="🟢 启用 Google 纠偏"; ACT_G="true"; }
                     [ "$ST_TRUST" == "true" ] && BTN_T="🔴 停用信用净化" && ACT_T="false" || { BTN_T="🟢 启用信用净化"; ACT_T="true"; }
 
-                    BTNS="[[{\"text\":\"$BTN_G\",\"callback_data\":\"toggle:google:$TARGET_NODE:$ACT_G\"}], [{\"text\":\"$BTN_T\",\"callback_data\":\"toggle:trust:$TARGET_NODE:$ACT_T\"}], [{\"text\":\"✏️ 修改节点备注\",\"callback_data\":\"rename:$TARGET_NODE\"}], [{\"text\":\"⬅️ 返回节点面板\",\"callback_data\":\"manage:$TARGET_NODE\"}]]"
+                    if [ "$TG_TOKEN" != "OFFICIAL_GATEWAY_MODE" ] && [ "$ST_OTA" == "true" ]; then
+                        BTN_OTA="{\"text\":\"🆙 远程升级客户端\",\"callback_data\":\"ota_confirm:$TARGET_NODE\"}"
+                        BTNS="[[{\"text\":\"$BTN_G\",\"callback_data\":\"toggle:google:$TARGET_NODE:$ACT_G\"}], [{\"text\":\"$BTN_T\",\"callback_data\":\"toggle:trust:$TARGET_NODE:$ACT_T\"}], [{\"text\":\"✏️ 修改节点备注\",\"callback_data\":\"rename:$TARGET_NODE\"}, $BTN_OTA], [{\"text\":\"⬅️ 返回节点面板\",\"callback_data\":\"manage:$TARGET_NODE\"}]]"
+                    else
+                        BTNS="[[{\"text\":\"$BTN_G\",\"callback_data\":\"toggle:google:$TARGET_NODE:$ACT_G\"}], [{\"text\":\"$BTN_T\",\"callback_data\":\"toggle:trust:$TARGET_NODE:$ACT_T\"}], [{\"text\":\"✏️ 修改节点备注\",\"callback_data\":\"rename:$TARGET_NODE\"}], [{\"text\":\"⬅️ 返回节点面板\",\"callback_data\":\"manage:$TARGET_NODE\"}]]"
+                    fi
                     
                     if [ -n "$MSG_ID" ]; then
                         edit_ui "$CHAT_ID" "$MSG_ID" "⚙️ **高级控制** | \`$TARGET_ALIAS\`\n请下达控制指令：" "$BTNS"
@@ -423,6 +461,48 @@ while true; do
                         else
                             # 增加输出 RESPONSE 调试信息，排查任何拦截死因
                             send_msg "$CHAT_ID" "⚠️ 节点拒绝了请求，请确保 Agent 已更新至 v3.5.2%0A(回传信息: \`${RESPONSE}\`)"
+                        fi
+                    else
+                        send_msg "$CHAT_ID" "❌ 数据库中未找到该节点的通讯地址。"
+                    fi
+                    ;;
+
+                ota_confirm:*)
+                    TARGET_NODE=$(echo "${TEXT#*:}" | tr -cd 'a-zA-Z0-9_.-')
+                    CONFIRM_BTNS="[[{\"text\":\"🚨 确认执行远程升级\",\"callback_data\":\"ota_execute:$TARGET_NODE\"}], [{\"text\":\"取消\",\"callback_data\":\"adv:$TARGET_NODE\"}]]"
+                    send_ui "$CHAT_ID" "☢️ **操作确认**：即将向 \`$TARGET_NODE\` 下发 OTA 热更新指令。\n节点更新完成后会自动发送包含新版本号的注册回执，确定执行？" "$CONFIRM_BTNS"
+                    ;;
+
+                ota_execute:*)
+                    TARGET_NODE=$(echo "${TEXT#*:}" | tr -cd 'a-zA-Z0-9_.-')
+                    CHAT_ID=$(echo "$CHAT_ID" | tr -cd '0-9-')
+                    
+                    AGENT_INFO=$(db_exec "SELECT agent_ip, agent_port FROM nodes WHERE chat_id='$CHAT_ID' AND node_name='$TARGET_NODE' LIMIT 1;")
+                    AGENT_IP=$(echo "$AGENT_INFO" | cut -d'|' -f1)
+                    AGENT_PORT=$(echo "$AGENT_INFO" | cut -d'|' -f2)
+
+                    if [ -n "$AGENT_IP" ] && [ -n "$AGENT_PORT" ]; then
+                        if [ -n "$MSG_ID" ]; then
+                            edit_msg "$CHAT_ID" "$MSG_ID" "⏳ 正在向 \`$TARGET_NODE\` 发送 OTA 触发报文..."
+                        else
+                            send_msg "$CHAT_ID" "⏳ 正在向 \`$TARGET_NODE\` 发送 OTA 触发报文..."
+                        fi
+                        
+                        TARGET_URL=$(generate_signed_url "$AGENT_IP" "$AGENT_PORT" "/trigger_ota")
+                        RESPONSE=$(curl -s -m 5 "$TARGET_URL" || echo "FAILED")
+                        
+                        if [ "$RESPONSE" == "FAILED" ]; then
+                            TEXT_RES="❌ OTA 指令下发超时！请检查节点公网连通性。"
+                        elif [[ "$RESPONSE" == *"403"* ]]; then
+                            TEXT_RES="⚠️ **节点拒绝执行**：该节点本地未开启 OTA 权限或运行在官方网关下！"
+                        else
+                            TEXT_RES="✅ OTA 触发成功！节点正在后台执行拉取重构，请等待其发送更新完成的回执消息。"
+                        fi
+                        
+                        if [ -n "$MSG_ID" ]; then
+                            edit_msg "$CHAT_ID" "$MSG_ID" "$TEXT_RES"
+                        else
+                            send_msg "$CHAT_ID" "$TEXT_RES"
                         fi
                     else
                         send_msg "$CHAT_ID" "❌ 数据库中未找到该节点的通讯地址。"
