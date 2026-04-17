@@ -203,7 +203,8 @@ while true; do
                         VER_INFO="${VER_INFO}\n✨ **发现新版本**: \`v${REMOTE_VER}\` (请尽快更新主控)"
                     fi
 
-                    if [ "$TG_TOKEN" != "OFFICIAL_GATEWAY_MODE" ]; then
+                    # [v3.6.0 核心] 官方网关 UI 全局熔断
+                    if [ "$IS_OFFICIAL_GATEWAY" != "true" ]; then
                         BTNS="[[{\"text\":\"🖥️ 我的节点列表\",\"callback_data\":\"list_nodes\"}], [{\"text\":\"🚀 全节点日报汇总\",\"callback_data\":\"all_reports\"}], [{\"text\":\"🛠️ 全节点一键维护\",\"callback_data\":\"all_run\"}], [{\"text\":\"⚠️ 全舰队 OTA 升级\",\"callback_data\":\"all_ota_confirm\"}]]"
                     else
                         BTNS="[[{\"text\":\"🖥️ 我的节点列表\",\"callback_data\":\"list_nodes\"}], [{\"text\":\"🚀 全节点日报汇总\",\"callback_data\":\"all_reports\"}], [{\"text\":\"🛠️ 全节点一键维护\",\"callback_data\":\"all_run\"}]]"
@@ -349,7 +350,8 @@ while true; do
                     [ "$ST_GOOGLE" == "true" ] && BTN_G="🔴 停用 Google 纠偏" && ACT_G="false" || { BTN_G="🟢 启用 Google 纠偏"; ACT_G="true"; }
                     [ "$ST_TRUST" == "true" ] && BTN_T="🔴 停用信用净化" && ACT_T="false" || { BTN_T="🟢 启用信用净化"; ACT_T="true"; }
 
-                    if [ "$TG_TOKEN" != "OFFICIAL_GATEWAY_MODE" ] && [ "$ST_OTA" == "true" ]; then
+                    # [v3.6.0 核心] 官方网关单节点 UI 熔断 + 本地开关双重校验
+                    if [ "$IS_OFFICIAL_GATEWAY" != "true" ] && [ "$ST_OTA" == "true" ]; then
                         BTN_OTA="{\"text\":\"🆙 远程升级客户端\",\"callback_data\":\"ota_confirm:$TARGET_NODE\"}"
                         BTNS="[[{\"text\":\"$BTN_G\",\"callback_data\":\"toggle:google:$TARGET_NODE:$ACT_G\"}], [{\"text\":\"$BTN_T\",\"callback_data\":\"toggle:trust:$TARGET_NODE:$ACT_T\"}], [{\"text\":\"✏️ 修改节点备注\",\"callback_data\":\"rename:$TARGET_NODE\"}, $BTN_OTA], [{\"text\":\"⬅️ 返回节点面板\",\"callback_data\":\"manage:$TARGET_NODE\"}]]"
                     else
