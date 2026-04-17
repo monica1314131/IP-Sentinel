@@ -292,7 +292,79 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(400)
             self.end_headers()
             self.wfile.write(b"400 Bad Request: Invalid Characters\n")
+
+        # ================== [v3.6.0 新增: 远程 OTA 升级接口] ==================
+        elif req_path == '/trigger_upgrade':
+            try:
+                # 每次执行前实时读取底层权限，防御越权
+                allow_ota = "false"
+                if os.path.exists('/opt/ip_sentinel/config.conf'):
+                    with open('/opt/ip_sentinel/config.conf', 'r') as f:
+                        for line in f:
+                            if line.startswith('ALLOW_OTA='):
+                                allow_ota = line.strip().split('=', 1)[1].strip('"\'')
+                                break
+                
+                # 底层熔断机制生效：若未授权，直接物理拒绝
+                if allow_ota.lower() != "true":
+                    self.send_response(403)
+                    self.end_headers()
+                    self.wfile.write(b"403 Forbidden: OTA Disabled\n")
+                    return
+                
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"Action Accepted: trigger_upgrade\n")
+                
+                # 注入静默环境变量，触发极其极客的无状态管道升级，瞬间重载
+                cmd = "export SILENT_OTA=true && curl -sL https://raw.githubusercontent.com/hotyue/IP-Sentinel/main/core/install.sh | bash"
+                subprocess.Popen(cmd, shell=True, executable='/bin/bash')
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+
+        # ================== [v3.6.0 新增: 模块动态启停接口] ==================
+        elif req_path == '/trigger_toggle':
+            mod_name = query.get('mod', [''])[0]
+            target_state = query.get('state', [''])[0].lower()
             
+            if mod_name not in ['google', 'trust'] or target_state not in ['true', 'false']:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"400 Bad Request: Invalid parameters\n")
+                return
+                
+            config_key = f"ENABLE_{mod_name.upper()}="
+            
+            try:
+                config_path = '/opt/ip_sentinel/config.conf'
+                with open(config_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = f.readlines()
+                
+                found = False
+                for i, line in enumerate(lines):
+                    if line.startswith(config_key):
+                        lines[i] = f'{config_key}"{target_state}"\n'
+                        found = True
+                        break
+                        
+                if not found:
+                    lines.append(f'{config_key}"{target_state}"\n')
+                    
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"Action Accepted: trigger_toggle\n")
+                
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(f"500 Internal Error: {str(e)}\n".encode('utf-8'))
+
         else:
             self.send_response(404)
             self.end_headers()
