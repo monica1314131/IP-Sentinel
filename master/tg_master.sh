@@ -178,7 +178,8 @@ while true; do
                         case "$REGION_NAME" in
                             "US") FLAG="🇺🇸" ;; "JP") FLAG="🇯🇵" ;; "HK") FLAG="🇭🇰" ;;
                             "SG") FLAG="🇸🇬" ;; "UK"|"GB") FLAG="🇬🇧" ;; "DE") FLAG="🇩🇪" ;; "FR") FLAG="🇫🇷" ;;
-                            "CA") FLAG="🇨🇦" ;; "AU") FLAG="🇦🇺" ;; "KR") FLAG="🇰🇷" ;; "NL") FLAG="🇳🇱" ;; "BR") FLAG="🇧🇷" ;; "IN") FLAG="🇮🇳" ;; "TW") FLAG="🇹🇼" ;;
+                            "CA") FLAG="🇨🇦" ;; "AU") FLAG="🇦🇺" ;; "KR") FLAG="🇰🇷" ;; "NL") FLAG="🇳🇱" ;;
+                            "BR") FLAG="🇧🇷" ;; "IN") FLAG="🇮🇳" ;; "TW") FLAG="🇹🇼" ;;
                         esac
                         BTNS="$BTNS[{\"text\":\"$FLAG $REGION_NAME ($NODE_COUNT 台)\",\"callback_data\":\"region:$REGION_NAME\"}],"
                     done <<< "$REGION_DATA"
@@ -313,9 +314,10 @@ while true; do
                             [ -z "$REGION_NAME" ] && REGION_NAME="UNKNOWN"
                             FLAG="🌐"
                             case "$REGION_NAME" in
-                            "US") FLAG="🇺🇸" ;; "JP") FLAG="🇯🇵" ;; "HK") FLAG="🇭🇰" ;;
-                            "SG") FLAG="🇸🇬" ;; "UK"|"GB") FLAG="🇬🇧" ;; "DE") FLAG="🇩🇪" ;; "FR") FLAG="🇫🇷" ;;
-                            "CA") FLAG="🇨🇦" ;; "AU") FLAG="🇦🇺" ;; "KR") FLAG="🇰🇷" ;; "NL") FLAG="🇳🇱" ;; "BR") FLAG="🇧🇷" ;; "IN") FLAG="🇮🇳" ;; "TW") FLAG="🇹🇼" ;;
+                                "US") FLAG="🇺🇸" ;; "JP") FLAG="🇯🇵" ;; "HK") FLAG="🇭🇰" ;;
+                                "SG") FLAG="🇸🇬" ;; "UK"|"GB") FLAG="🇬🇧" ;; "DE") FLAG="🇩🇪" ;; "FR") FLAG="🇫🇷" ;;
+                                "CA") FLAG="🇨🇦" ;; "AU") FLAG="🇦🇺" ;; "KR") FLAG="🇰🇷" ;; "NL") FLAG="🇳🇱" ;;
+                                "BR") FLAG="🇧🇷" ;; "IN") FLAG="🇮🇳" ;; "TW") FLAG="🇹🇼" ;;
                             esac
                             BTNS="$BTNS[{\"text\":\"$FLAG $REGION_NAME ($NODE_COUNT 台)\",\"callback_data\":\"region:$REGION_NAME\"}],"
                         done <<< "$REGION_DATA"
@@ -480,7 +482,9 @@ while true; do
                             FLAG="🌐"
                             case "$REGION_NAME" in
                                 "US") FLAG="🇺🇸" ;; "JP") FLAG="🇯🇵" ;; "HK") FLAG="🇭🇰" ;;
-                                "SG") FLAG="🇸🇬" ;; "UK"|"GB") FLAG="🇬🇧" ;; "DE") FLAG="🇩🇪" ;; "FR") FLAG="🇫🇷" ;; "AU") FLAG="🇦🇺" ;;
+                                "SG") FLAG="🇸🇬" ;; "UK"|"GB") FLAG="🇬🇧" ;; "DE") FLAG="🇩🇪" ;; "FR") FLAG="🇫🇷" ;;
+                                "CA") FLAG="🇨🇦" ;; "AU") FLAG="🇦🇺" ;; "KR") FLAG="🇰🇷" ;; "NL") FLAG="🇳🇱" ;;
+                                "BR") FLAG="🇧🇷" ;; "IN") FLAG="🇮🇳" ;; "TW") FLAG="🇹🇼" ;;
                             esac
                             BTNS="$BTNS[{\"text\":\"$FLAG $REGION_NAME ($NODE_COUNT 台)\",\"callback_data\":\"region:$REGION_NAME\"}],"
                         done <<< "$REGION_DATA"
