@@ -394,14 +394,20 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
 
 import socket
 # ================== [v3.0.3 变更: 引入多线程模型抵抗 Slowloris 攻击] ==================
-class ThreadedDualStackServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+class ThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True # 开启端口复用，防止热重启时端口冲突
-    address_family = socket.AF_INET6 if socket.has_ipv6 else socket.AF_INET
 
 try:
-    bind_addr = "::" if socket.has_ipv6 else ""
-    with ThreadedDualStackServer((bind_addr, PORT), AgentHandler) as httpd:
-        httpd.serve_forever()
+    # 1. 优先尝试监听双栈/IPv6 (大多数 Linux 默认支持 IPv4 映射接入)
+    ThreadedServer.address_family = socket.AF_INET6
+    httpd = ThreadedServer(("::", PORT), AgentHandler)
+except Exception:
+    # 2. [核心修复 Issue #23] 若系统内核已禁用 IPv6，抛弃报错，智能回退至纯 IPv4 监听
+    ThreadedServer.address_family = socket.AF_INET
+    httpd = ThreadedServer(("0.0.0.0", PORT), AgentHandler)
+
+try:
+    httpd.serve_forever()
 except Exception as e:
     sys.exit(1)
 # ====================================================================================
