@@ -267,7 +267,13 @@ while true; do
                     # 抛出幽灵进程进行脱壳升级，传递静默变量与回执 ID
                     export SILENT_MASTER_OTA="true"
                     export OTA_CHAT_ID="$CHAT_ID"
-                    nohup bash /tmp/install_master.sh >/dev/null 2>&1 & disown
+                    
+                    # [修复] 逃逸 Systemd Cgroup，防止被同归于尽机制误杀
+                    if command -v systemd-run >/dev/null 2>&1; then
+                        systemd-run --quiet --no-block /bin/bash /tmp/install_master.sh
+                    else
+                        nohup bash /tmp/install_master.sh >/dev/null 2>&1 & disown
+                    fi
                     
                     # 当前旧进程休眠并等待被幽灵进程处决
                     sleep 10

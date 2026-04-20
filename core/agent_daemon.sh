@@ -375,10 +375,17 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(b"Action Accepted: trigger_ota\n")
                 
                 # 挂起异步升级进程 (注入 SILENT_OTA 旁路变量跳过所有 read -p 交互)
-                # 注意：这里我们写死拉取 dev-v3.6.0 分支的安装脚本进行覆盖测试，未来正式版上线时会改回 main
-                repo_url = "https://raw.githubusercontent.com/hotyue/IP-Sentinel/dev-v3.6.0"
-                ota_cmd = f"export SILENT_OTA='true'; curl -sL {repo_url}/core/install.sh | bash > /opt/ip_sentinel/logs/ota_upgrade.log 2>&1 &"
-                subprocess.Popen(['bash', '-c', ota_cmd])
+                import shutil
+                repo_url = "https://raw.githubusercontent.com/hotyue/IP-Sentinel/main"
+                ota_cmd = f"export SILENT_OTA='true'; curl -sL {repo_url}/core/install.sh | bash > /opt/ip_sentinel/logs/ota_upgrade.log 2>&1"
+                
+                # [修复] 逃逸 Systemd Cgroup，防止 Agent 在升级时被同归于尽机制误杀
+                if shutil.which("systemd-run"):
+                    full_cmd = f"systemd-run --quiet --no-block bash -c \"{ota_cmd}\""
+                else:
+                    full_cmd = f"nohup bash -c \"{ota_cmd}\" &"
+                    
+                subprocess.Popen(full_cmd, shell=True)
                 
             except Exception as e:
                 self.send_response(500)
