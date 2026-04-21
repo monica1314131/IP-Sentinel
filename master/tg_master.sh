@@ -299,11 +299,13 @@ while true; do
                     if [ -z "$NODE_DATA" ]; then
                         send_msg "$CHAT_ID" "⚠️ 您名下暂无在线节点。"
                     else
-                        send_msg "$CHAT_ID" "📢 **司令部指令下达：正在召唤所有哨兵回传简报...**"
+                        # [文案优化] 提前告知指挥官需要排队等待
+                        send_msg "$CHAT_ID" "📢 **司令部指令下达：正在召唤所有哨兵回传简报...**%0A*(为防止触发 TG 官方限流，简报将排队依次送达，请耐心等待)*"
                         echo "$NODE_DATA" | while IFS='|' read -r NNAME AIP APORT; do
-                            TARGET_URL=$(generate_signed_url "$AIP" "$APORT" "/trigger_run")
+                            TARGET_URL=$(generate_signed_url "$AIP" "$APORT" "/trigger_report")
                             { curl -k -s -m 5 "$TARGET_URL" || curl -s -m 5 "${TARGET_URL/https:\/\//http:\/\/}"; } > /dev/null &
-                            sleep 0.2  # [新增] 流量削峰：防止瞬间 fork 导致句柄耗尽
+                            # [致命修复] 强行休眠 2 秒！错开 TG 官方 1条/秒 的发信红线
+                            sleep 2  
                         done
                     fi
                     ;;
