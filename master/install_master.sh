@@ -5,10 +5,19 @@
 # 核心功能: 部署/卸载调度中枢、SQLite 资产管理、平滑热更新引擎
 # ==========================================================
 
+# ==========================================================
+# 🛑 核心权限防线: 检查是否以 root 权限运行
+# ==========================================================
+if [ "$EUID" -ne 0 ]; then
+  echo -e "\033[31m❌ 权限被拒绝: 部署 IP-Sentinel 需要最高系统权限。\033[0m"
+  echo -e "💡 请切换到 root 用户 (执行 su root 或 sudo -i) 后重新运行指令。"
+  exit 1
+fi
+
 # 你的 GitHub 仓库 Raw 数据直链前缀
-REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/main"
+# REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/main"
 # 临时改为开发地址用于测试
-# REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/dev-v3.6.1"
+REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/v3.6.2-rc"
 
 # [核心: 动态提取 Master 专属版本锚点 (KV 解析法)]
 # 通过 grep 定位 MASTER_VERSION 行，再通过 cut 提取等号右侧的值
@@ -260,14 +269,47 @@ echo -e "\n[4/4] 部署 TG 调度守护进程..."
 curl -sL "${REPO_RAW_URL}/master/tg_master.sh" -o "${MASTER_DIR}/tg_master.sh"
 chmod +x "${MASTER_DIR}/tg_master.sh"
 
-# 写入看门狗 Cron (容错版)
-crontab -l 2>/dev/null | grep -v "tg_master.sh" > /tmp/cron_master || true
-echo "* * * * * pgrep -f tg_master.sh >/dev/null || nohup bash ${MASTER_DIR}/tg_master.sh >/dev/null 2>&1 &" >> /tmp/cron_master
-[ -f /tmp/cron_master ] && crontab /tmp/cron_master 2>/dev/null
-rm -f /tmp/cron_master
+if command -v systemctl >/dev/null 2>&1; then
+    echo "💡 检测到 Systemd 环境，正在部署原生守护服务..."
+    
+    cat > /etc/systemd/system/ip-sentinel-master.service << EOF
+[Unit]
+Description=IP-Sentinel Master Command Center Service
+After=network.target
 
-# 立刻启动 (追加 disown 彻底脱离终端管控，实现绝对静默)
-pgrep -f tg_master.sh >/dev/null || { nohup bash "${MASTER_DIR}/tg_master.sh" >/dev/null 2>&1 & disown 2>/dev/null; }
+[Service]
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+SyslogIdentifier=ip-sentinel
+Type=simple
+ExecStart=/bin/bash ${MASTER_DIR}/tg_master.sh
+Restart=always
+RestartSec=5
+User=root
+WorkingDirectory=${MASTER_DIR}
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable --now ip-sentinel-master.service
+    systemctl restart ip-sentinel-master.service
+    
+    # 清理可能残留的历史 Cron
+    crontab -l 2>/dev/null | grep -v "tg_master.sh" > /tmp/cron_master || true
+    [ -f /tmp/cron_master ] && crontab /tmp/cron_master 2>/dev/null
+    rm -f /tmp/cron_master
+else
+    echo "💡 未检测到 Systemd，回退到 Cron 看门狗调度模式..."
+    crontab -l 2>/dev/null | grep -v "tg_master.sh" > /tmp/cron_master || true
+    echo "* * * * * pgrep -f tg_master.sh >/dev/null || nohup bash ${MASTER_DIR}/tg_master.sh >/dev/null 2>&1 &" >> /tmp/cron_master
+    [ -f /tmp/cron_master ] && crontab /tmp/cron_master 2>/dev/null
+    rm -f /tmp/cron_master
+    
+    pgrep -f tg_master.sh >/dev/null || { nohup bash "${MASTER_DIR}/tg_master.sh" >/dev/null 2>&1 & disown 2>/dev/null; }
+fi
 
 # ================== [v3.2.2 优化 & v3.6.1 OTA捷报: 战报文案分流] ==================
 echo "========================================================"

@@ -5,10 +5,19 @@
 # 核心功能: 战区分组菜单、模块按需开启、官方机器人一键配置、版本状态机路由
 # ==========================================================
 
+# ==========================================================
+# 🛑 核心权限防线: 检查是否以 root 权限运行
+# ==========================================================
+if [ "$EUID" -ne 0 ]; then
+  echo -e "\033[31m❌ 权限被拒绝: 部署 IP-Sentinel 需要最高系统权限。\033[0m"
+  echo -e "💡 请切换到 root 用户 (执行 su root 或 sudo -i) 后重新运行指令。"
+  exit 1
+fi
+
 # 你的 GitHub 仓库 Raw 数据直链前缀
-REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/main"
+# REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/main"
 # 临时改为开发地址用于测试
-# REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/dev-v3.6.0"
+REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/v3.6.2-rc"
 INSTALL_DIR="/opt/ip_sentinel"
 CONFIG_FILE="${INSTALL_DIR}/config.conf"
 
@@ -249,15 +258,17 @@ if [ "$UPGRADE_MODE" == "false" ]; then
         IFS="|" read -r CITY_ID CITY_NAME < /tmp/cities.txt
         echo -e "\033[32m💡 该区域下仅有单一城市 [$CITY_NAME]，已自动锁定。\033[0m"
     else
-        i=1; CITY_MAP=()
+        i=1; CITY_MAP=(); CITY_NAME_MAP=()
         while IFS="|" read -r c_id c_name; do
             echo "  $i) $c_name"
             CITY_MAP[$i]="$c_id"
+            CITY_NAME_MAP[$i]="$c_name"
             ((i++))
         done < /tmp/cities.txt
         read -p "请输入选择 [1-$((i-1))] (默认1): " CI_SEL
         CI_SEL=${CI_SEL:-1}
         CITY_ID="${CITY_MAP[$CI_SEL]}"
+        CITY_NAME="${CITY_NAME_MAP[$CI_SEL]}"
     fi
 
     # 清理临时文件 (增加清理 continents.txt)
@@ -622,37 +633,139 @@ fi
 chmod +x ${INSTALL_DIR}/core/*.sh
 
 # 7. 配置系统定时任务 (高频调度与看门狗)
-echo -e "\n[7/7] 正在注入系统定时任务与看门狗进程..."
-crontab -l 2>/dev/null | grep -v "ip_sentinel" > /tmp/cron_backup || true
-
-# 核心养护模块: 每 30 分钟触发一次
-echo "*/30 * * * * ${INSTALL_DIR}/core/runner.sh >/dev/null 2>&1" >> /tmp/cron_backup
-# 养料更新模块: (v3.3.0升级) 每天凌晨 3 点触发，由中枢自动进行分频调度
-echo "0 3 * * * ${INSTALL_DIR}/core/updater.sh >/dev/null 2>&1" >> /tmp/cron_backup
+echo -e "\n[7/7] 正在注入系统守护进程与调度器..."
 
 # [v3.3.0 新增] 初始化 UA 指纹库更新时间戳，确立 30 天滚动周期的计算锚点
 echo $(date +%s) > "${INSTALL_DIR}/core/.ua_last_update"
 
-# 如果配置了联控，启动 Webhook 与战报任务
-if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
-    # 每天早上 8 点发送昨天的统计战报
-    echo "0 8 * * * ${INSTALL_DIR}/core/tg_report.sh >/dev/null 2>&1" >> /tmp/cron_backup
+if command -v systemctl >/dev/null 2>&1; then
+    echo "💡 检测到 Systemd 环境，正在部署原生守护服务..."
     
-    # [v3.0.1新增修改 3: 删除原来的 curl 取 IP，直接使用我们上方锁定的 BIND_IP]
-    # 并提前写入 IP 缓存，彻底阻断 agent_daemon 首次启动时的重复推送
-    # [修复竞态]: 提前写入公网 IP 缓存，彻底阻断 agent_daemon 首次启动时的抢跑推送
-    echo "$SAFE_PUBLIC_IP" > "${INSTALL_DIR}/core/.last_ip"
-    
-    # 双保险守护进程看门狗
-    echo "@reboot nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" >> /tmp/cron_backup
-    echo "* * * * * nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" >> /tmp/cron_backup
-    
-    # 安装时立刻启动一次边缘守护进程
-    nohup bash "${INSTALL_DIR}/core/agent_daemon.sh" >/dev/null 2>&1 &
-fi
+    # 1. Runner 核心养护模块服务与定时器
+    cat > /etc/systemd/system/ip-sentinel-runner.service << EOF
+[Unit]
+Description=IP-Sentinel Runner Service
+After=network.target
+[Service]
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+SyslogIdentifier=ip-sentinel
+Type=oneshot
+ExecStart=/bin/bash ${INSTALL_DIR}/core/runner.sh
+User=root
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+EOF
 
-[ -f /tmp/cron_backup ] && crontab /tmp/cron_backup 2>/dev/null
-rm -f /tmp/cron_backup
+    cat > /etc/systemd/system/ip-sentinel-runner.timer << EOF
+[Unit]
+Description=Timer for IP-Sentinel Runner Service
+[Timer]
+OnBootSec=10
+OnUnitActiveSec=30min
+RandomizedDelaySec=180
+Persistent=true
+Unit=ip-sentinel-runner.service
+[Install]
+WantedBy=timers.target
+EOF
+
+    # 2. Updater 养料更新模块服务与定时器
+    cat > /etc/systemd/system/ip-sentinel-updater.service << EOF
+[Unit]
+Description=IP-Sentinel Updater Service
+After=network.target
+[Service]
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+SyslogIdentifier=ip-sentinel
+Type=oneshot
+ExecStart=/bin/bash ${INSTALL_DIR}/core/updater.sh
+User=root
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+EOF
+
+    cat > /etc/systemd/system/ip-sentinel-updater.timer << EOF
+[Unit]
+Description=Timer for IP-Sentinel Updater Service
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=ip-sentinel-updater.service
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable --now ip-sentinel-runner.timer ip-sentinel-updater.timer
+
+    if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
+        # 3. TG 战报服务与定时器
+        cat > /etc/systemd/system/ip-sentinel-report.service << EOF
+[Unit]
+Description=IP-Sentinel Telegram Report Service
+After=network.target
+[Service]
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+SyslogIdentifier=ip-sentinel
+Type=oneshot
+ExecStart=/bin/bash ${INSTALL_DIR}/core/tg_report.sh
+User=root
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+EOF
+
+        cat > /etc/systemd/system/ip-sentinel-report.timer << EOF
+[Unit]
+Description=Timer for IP-Sentinel Telegram Report Service
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Unit=ip-sentinel-report.service
+[Install]
+WantedBy=timers.target
+EOF
+
+        # 4. [排雷修复] Agent Daemon Webhook 监听守护服务 (Type=simple, 常驻执行)
+        cat > /etc/systemd/system/ip-sentinel-agent-daemon.service << EOF
+[Unit]
+Description=IP-Sentinel Agent Daemon Service
+After=network.target
+[Service]
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+SyslogIdentifier=ip-sentinel
+Type=simple
+ExecStart=/bin/bash ${INSTALL_DIR}/core/agent_daemon.sh
+Restart=always
+RestartSec=5
+User=root
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        # [修复竞态]: 提前写入公网 IP 缓存，阻断重复推送
+        echo "$SAFE_PUBLIC_IP" > "${INSTALL_DIR}/core/.last_ip"
+        
+        systemctl daemon-reload
+        systemctl enable --now ip-sentinel-report.timer
+        systemctl enable --now ip-sentinel-agent-daemon.service
+    fi
+else
+    echo "💡 未检测到 Systemd (可能是 Alpine Linux)，回退到 Cron 调度模式..."
+    crontab -l 2>/dev/null | grep -v "ip_sentinel" > /tmp/cron_backup || true
+    echo "*/30 * * * * ${INSTALL_DIR}/core/runner.sh >/dev/null 2>&1" >> /tmp/cron_backup
+    echo "0 3 * * * ${INSTALL_DIR}/core/updater.sh >/dev/null 2>&1" >> /tmp/cron_backup
+    
+    if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
+        echo "0 8 * * * ${INSTALL_DIR}/core/tg_report.sh >/dev/null 2>&1" >> /tmp/cron_backup
+        echo "$SAFE_PUBLIC_IP" > "${INSTALL_DIR}/core/.last_ip"
+        echo "@reboot nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" >> /tmp/cron_backup
+        echo "* * * * * nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" >> /tmp/cron_backup
+        nohup bash "${INSTALL_DIR}/core/agent_daemon.sh" >/dev/null 2>&1 &
+    fi
+    [ -f /tmp/cron_backup ] && crontab /tmp/cron_backup 2>/dev/null
+    rm -f /tmp/cron_backup
+fi
 
 # ================== [v3.4.0 核心: 状态机驱动的热更新路由] ==================
 if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then

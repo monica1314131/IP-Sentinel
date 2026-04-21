@@ -24,10 +24,6 @@ if [ -z "$NODE_NAME" ]; then
 fi
 NODE_ALIAS="${NODE_ALIAS:-$NODE_NAME}"
 
-# --- [重点升级 1: 守护进程防冲突自检] ---
-if pgrep -f "webhook.py $AGENT_PORT" > /dev/null; then
-    exit 0
-fi
 
 # 1. 尝试获取实时公网 IP
 RAW_IP=$(curl -${IP_PREF:-4} -s -m 5 api.ip.sb/ip | tr -d '[:space:]')
@@ -374,11 +370,17 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b"Action Accepted: trigger_ota\n")
                 
-                # 挂起异步升级进程 (注入 SILENT_OTA 旁路变量跳过所有 read -p 交互)
-                # 注意：这里我们写死拉取 dev-v3.6.0 分支的安装脚本进行覆盖测试，未来正式版上线时会改回 main
-                repo_url = "https://raw.githubusercontent.com/hotyue/IP-Sentinel/dev-v3.6.0"
-                ota_cmd = f"export SILENT_OTA='true'; curl -sL {repo_url}/core/install.sh | bash > /opt/ip_sentinel/logs/ota_upgrade.log 2>&1 &"
-                subprocess.Popen(['bash', '-c', ota_cmd])
+                # [修复] 逃逸 Systemd Cgroup，防止 Agent 在升级时被同归于尽机制误杀
+                import shutil
+                repo_url = "https://raw.githubusercontent.com/hotyue/IP-Sentinel/v3.6.2-rc"
+                ota_cmd = f"export SILENT_OTA='true'; curl -fsSL {repo_url}/core/install.sh -o /tmp/ota_agent.sh && bash /tmp/ota_agent.sh > /opt/ip_sentinel/logs/ota_upgrade.log 2>&1"
+                
+                if shutil.which("systemd-run"):
+                    full_cmd = f"systemd-run --quiet --no-block bash -c \"{ota_cmd}\""
+                else:
+                    full_cmd = f"nohup bash -c \"{ota_cmd}\" &"
+                    
+                subprocess.Popen(full_cmd, shell=True)
                 
             except Exception as e:
                 self.send_response(500)
@@ -413,8 +415,6 @@ except Exception as e:
 # ====================================================================================
 EOF
 
-# --- [重点升级 3: 真正的静默后台启动] ---
-echo "🚀 [Agent] 正在后台启动 Webhook 监听服务 (端口: $AGENT_PORT)..."
-nohup python3 "${INSTALL_DIR}/core/webhook.py" "$AGENT_PORT" > /dev/null 2>&1 &
-disown 2>/dev/null || true
-echo "✅ [Agent] 守护进程启动完毕，可安全关闭终端。"
+# --- [重点升级 3: 移交系统级守护进程接管 (阻塞模式)] ---
+echo "🚀 [Agent] 正在启动 Webhook 监听服务 (端口: $AGENT_PORT)..."
+exec python3 "${INSTALL_DIR}/core/webhook.py" "$AGENT_PORT"
