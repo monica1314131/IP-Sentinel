@@ -370,10 +370,12 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b"Action Accepted: trigger_ota\n")
                 
-                # [修复] 逃逸 Systemd Cgroup，防止 Agent 在升级时被同归于尽机制误杀
+                # [修复] 逃逸 Systemd Cgroup，并引入 bash -n 语法树校验防砖机制
                 import shutil
-                repo_url = "https://raw.githubusercontent.com/hotyue/IP-Sentinel/main"
-                ota_cmd = f"export SILENT_OTA='true'; curl -fsSL {repo_url}/core/install.sh -o /tmp/ota_agent.sh && bash /tmp/ota_agent.sh > /opt/ip_sentinel/logs/ota_upgrade.log 2>&1"
+                repo_url = "https://raw.githubusercontent.com/hotyue/IP-Sentinel/v3.6.3-dev"
+                
+                # [v3.6.3 修复] 🚀 下载后先执行 if bash -n 语法校验，通过后再执行覆盖
+                ota_cmd = f"export SILENT_OTA='true'; curl -fsSL {repo_url}/core/install.sh -o /tmp/ota_agent.sh && if bash -n /tmp/ota_agent.sh; then bash /tmp/ota_agent.sh > /opt/ip_sentinel/logs/ota_upgrade.log 2>&1; else echo 'OTA Checksum Failed: Script corrupted' > /opt/ip_sentinel/logs/ota_upgrade.log; fi"
                 
                 if shutil.which("systemd-run"):
                     full_cmd = f"systemd-run --quiet --no-block bash -c \"{ota_cmd}\""

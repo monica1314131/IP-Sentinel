@@ -10,7 +10,7 @@ CONF="/opt/ip_sentinel_master/master.conf"
 source "$CONF"
 
 # [核心: 运行态版本继承与云通信地址]
-REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/main"
+REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/v3.6.3-dev"
 # 临时改为开发地址用于测试
 # REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/v3.6.2-rc"
 # MASTER_VERSION 已经在上方的 source "$CONF" 中被载入
@@ -262,6 +262,17 @@ while true; do
 
                     # 下载最新的 master install 脚本作为幽灵进程
                     curl -fsSL "${REPO_RAW_URL}/master/install_master.sh" -o "/tmp/install_master.sh"
+                    
+                    # [v3.6.3 修复] 🚀 OTA 防砖机制：严格校验脚本完整性
+                    if ! bash -n "/tmp/install_master.sh" >/dev/null 2>&1; then
+                        if [ -n "$MSG_ID" ]; then
+                            edit_msg "$CHAT_ID" "$MSG_ID" "❌ OTA 传输受损：脚本下载不完整，已触发防砖熔断，升级取消！"
+                        else
+                            send_msg "$CHAT_ID" "❌ OTA 传输受损：脚本下载不完整，已触发防砖熔断，升级取消！"
+                        fi
+                        continue
+                    fi
+                    
                     chmod +x "/tmp/install_master.sh"
                     
                     # 抛出幽灵进程进行脱壳升级，传递静默变量与回执 ID
