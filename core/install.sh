@@ -634,6 +634,8 @@ else
 fi
 
 curl -sL "${REPO_RAW_URL}/core/mod_trust.sh" -o "${INSTALL_DIR}/core/mod_trust.sh"
+# [v4.0.0 新增] 下载深海声呐 IP 质量检测模块
+curl -sL "${REPO_RAW_URL}/core/mod_quality.sh" -o "${INSTALL_DIR}/core/mod_quality.sh"
 
 chmod +x ${INSTALL_DIR}/core/*.sh
 
