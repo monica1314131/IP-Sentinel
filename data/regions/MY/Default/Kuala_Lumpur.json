@@ -8,16 +8,16 @@
   },
   "trust_module": {
     "white_urls": [
-      "https://www.cimbclicks.com.my/",
-      "https://www.maybank2u.com.my/",
-      "https://www.pos.com.my/",
-      "https://www.lazada.com.my/",
+      "https://www.malaysia.gov.my/",
       "https://shopee.com.my/",
       "https://um.edu.my/",
       "https://www.hasil.gov.my/",
-      "https://www.malaysia.gov.my/",
+      "https://www.lazada.com.my/",
+      "https://www.thestar.com.my/",
       "https://www.kwsp.gov.my/",
-      "https://www.thestar.com.my/"
+      "https://www.maybank2u.com.my/",
+      "https://www.pos.com.my/",
+      "https://www.cimbclicks.com.my/"
     ],
     "static_urls": [
       "https://www.malaysia.gov.my/",
