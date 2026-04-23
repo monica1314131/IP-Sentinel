@@ -30,7 +30,7 @@ RSS_FEEDS = {
     "SG": ["https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml"],
     "NL": ["https://feeds.nos.nl/nosnieuwsalgemeen"],
     "VN": ["https://vnexpress.net/rss/tin-moi-nhat.rss"],
-    "MY": ["https://malaysia.news.yahoo.com/rss"]
+    "MY": ["https://news.google.com/rss?hl=en-MY&gl=MY&ceid=MY:en"]
 }
 
 def fetch_rss_links(region_code, max_items=15):
