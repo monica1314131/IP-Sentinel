@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==========================================================
-# IP-Sentinel: 深海声呐 (IP 质量全维异步检测模块)
+# IP-Sentinel: 深海声呐 (IP 质量全维异步检测模块满血版)
 # ==========================================================
 
 source /opt/ip_sentinel/config.conf
@@ -22,15 +22,21 @@ if [ -z "$JSON_DATA" ]; then
     exit 1
 fi
 
-# 2. 提取核心基础指标
+# 2. 提取全维基础指标
 IP_ADDR=$(echo "$JSON_DATA" | jq -r '.Head.IP // empty')
 [ -z "$IP_ADDR" ] && IP_ADDR="$PUBLIC_IP"
-
-SCAM_SCORE=$(echo "$JSON_DATA" | jq -r '.Score.SCAMALYTICS // "0"')
-FRAUD_RISK=$(echo "$JSON_DATA" | jq -r '.Score.ipapi // "0%"')
+ASN=$(echo "$JSON_DATA" | jq -r '.Info.ASN // "Unknown"')
+ORG=$(echo "$JSON_DATA" | jq -r '.Info.Organization // "Unknown"')
+CITY=$(echo "$JSON_DATA" | jq -r '.Info.City.Name // "Unknown"')
+IP_TYPE=$(echo "$JSON_DATA" | jq -r '.Info.Type // "Unknown"')
 USAGE_TYPE=$(echo "$JSON_DATA" | jq -r '.Type.Usage.IPinfo // "Unknown"')
 
-# 3. 提取流媒体与 AI 解锁指标
+# 3. 提取深度风险评分
+SCAM_SCORE=$(echo "$JSON_DATA" | jq -r '.Score.SCAMALYTICS // "0"')
+FRAUD_RISK=$(echo "$JSON_DATA" | jq -r '.Score.ipapi // "0%"')
+ABUSE_SCORE=$(echo "$JSON_DATA" | jq -r '.Score.AbuseIPDB // "0"')
+
+# 4. 提取流媒体与 AI 解锁指标
 NF_STAT=$(echo "$JSON_DATA" | jq -r '.Media.Netflix.Status // "Unknown"')
 NF_REG=$(echo "$JSON_DATA" | jq -r '.Media.Netflix.Region // ""')
 YT_STAT=$(echo "$JSON_DATA" | jq -r '.Media.Youtube.Status // "Unknown"')
@@ -41,41 +47,53 @@ TK_STAT=$(echo "$JSON_DATA" | jq -r '.Media.TikTok.Status // "Unknown"')
 TK_REG=$(echo "$JSON_DATA" | jq -r '.Media.TikTok.Region // ""')
 GPT_STAT=$(echo "$JSON_DATA" | jq -r '.Media.ChatGPT.Status // "Unknown"')
 GPT_REG=$(echo "$JSON_DATA" | jq -r '.Media.ChatGPT.Region // ""')
+APV_STAT=$(echo "$JSON_DATA" | jq -r '.Media.AmazonPrimeVideo.Status // "Unknown"')
+APV_REG=$(echo "$JSON_DATA" | jq -r '.Media.AmazonPrimeVideo.Region // ""')
 
+# 5. 邮局连通性与黑名单
+PORT25=$(echo "$JSON_DATA" | jq -r '.Mail.Port25 // "false"')
+[ "$PORT25" == "true" ] && P25_TEXT="✅ 放行" || P25_TEXT="❌ 封堵"
 DNS_BLACK=$(echo "$JSON_DATA" | jq -r '.Mail.DNSBlacklist.Blacklisted // "0"')
 DNS_MARK=$(echo "$JSON_DATA" | jq -r '.Mail.DNSBlacklist.Marked // "0"')
 
-# 4. “送中” 逻辑判定
+# 6. “送中” 逻辑判定
 WARNING_MSG=""
 if [[ "$YT_REG" == *"[CN]"* ]] || [[ "$YT_STAT" == *"China"* ]]; then
     WARNING_MSG="%0A🚨 **高危警告：该 IP 已被 Google / YouTube 送中！**%0A"
 fi
 
-# 5. 组装 Markdown 战报
-REPORT="🎯 *深海声呐 - 深度探测报告*
+# 7. 组装 Markdown 战报 (满血版)
+REPORT="🎯 *深海声呐 - 全维探测报告*
 📍 节点：\`${NODE_ALIAS}\`
 🌐 IP：\`${IP_ADDR}\`${WARNING_MSG}
 
-*🛡️ 信用评估*
-• **Scamalytics：** \`${SCAM_SCORE}/100\`
-• **IPAPI 风险：** \`${FRAUD_RISK}\`
-• **属性类别：** \`${USAGE_TYPE}\`
+*🏢 物理定位与特征*
+• **所属机房：** \`AS${ASN} (${ORG})\`
+• **物理定位：** \`${CITY}\`
+• **路由属性：** \`${IP_TYPE}\` | \`${USAGE_TYPE}\`
 
-*🎬 核心解锁状态*
+*🛡️ 欺诈与信用评估*
+• **Scamalytics：** \`${SCAM_SCORE}/100\` (欺诈分)
+• **AbuseIPDB：** \`${ABUSE_SCORE}/100\` (滥用投诉)
+• **IPAPI 风险：** \`${FRAUD_RISK}\` (代理与机房概率)
+
+*🎬 核心解锁雷达*
 • **YouTube:** \`${YT_STAT}\` ${YT_REG}
 • **Netflix:** \`${NF_STAT}\` ${NF_REG}
 • **Disney+:** \`${DP_STAT}\` ${DP_REG}
+• **PrimeVideo:** \`${APV_STAT}\` ${APV_REG}
 • **TikTok:** \`${TK_STAT}\` ${TK_REG}
 • **ChatGPT:** \`${GPT_STAT}\` ${GPT_REG}
 
-*✉️ 纯净度*
-严重黑名单: \`${DNS_BLACK}\` | 轻度标记: \`${DNS_MARK}\`
+*✉️ 邮局与纯净度*
+• **25 端口出站:** ${P25_TEXT}
+• **DNS 黑名单:** \`${DNS_BLACK}\` 严重 | \`${DNS_MARK}\` 轻度
 
-_👉 [🔍 点击前往 Scamalytics 查阅详细 IP 信用](https://scamalytics.com/ip/${TARGET_IP})_
+_👉 [🔍 前往 Scamalytics 查阅详细 IP 报告](https://scamalytics.com/ip/${TARGET_IP})_
 
 \`[SYSTEM_REPORT]|QUALITY|${NODE_NAME}|${SCAM_SCORE}|${NF_STAT}\`"
 
-# 6. 直送指挥部
+# 8. 直送指挥部
 curl -s -X POST "${TG_API_URL}" \
     -d "chat_id=${CHAT_ID}" \
     -d "parse_mode=Markdown" \
