@@ -8,8 +8,19 @@ source /opt/ip_sentinel/config.conf
 TARGET_IP=$(echo "${BIND_IP:-$PUBLIC_IP}" | tr -d '[]')
 IP_PROTO="${IP_PREF:-4}"
 
-# 1. 静默拉取 JSON (去除引发截断的 sed，恢复稳定的纯净拉取方式)
-JSON_DATA=$(timeout 180 bash <(curl -sL https://IP.Check.Place) -y -j -${IP_PROTO} -i "${TARGET_IP}" 2>/dev/null)
+# 1. 静默拉取原始数据 (消除短链接 RCE 劫持风险，收编为本地固化执行)
+PROBE_SCRIPT="/opt/ip_sentinel/core/ip_probe.sh"
+if [ ! -x "$PROBE_SCRIPT" ]; then
+    # 若本地探针尚未就绪，直接从 GitHub 官方主干拉取底层源码，绕过未知域名
+    curl -sL "https://raw.githubusercontent.com/xykt/IPQuality/main/ip.sh" -o "$PROBE_SCRIPT" 2>/dev/null
+    chmod +x "$PROBE_SCRIPT" 2>/dev/null
+fi
+
+# 采用本地执行，彻底封死运行时的外部投毒通道
+RAW_OUTPUT=$(timeout 180 bash "$PROBE_SCRIPT" -y -j -${IP_PROTO} -i "${TARGET_IP}" 2>/dev/null)
+
+# 2. 极致截取 JSON (无视开头的赞助商广告与不可见字符，精准提取)
+JSON_DATA="{${RAW_OUTPUT#*\{}"
 
 # 2. 提取基础物理定位与身份特征 (兼作合法性校验)
 IP_ADDR=$(echo "$JSON_DATA" | jq -r '.Head.IP // empty' 2>/dev/null)
