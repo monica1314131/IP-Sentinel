@@ -162,7 +162,8 @@ if [ ${#MISSING_CMDS[@]} -gt 0 ]; then
         systemctl enable crond >/dev/null 2>&1 && systemctl start crond >/dev/null 2>&1
     elif command -v apk >/dev/null 2>&1; then
         echo "Alpine 探测到系统类型为 Alpine Linux，正在执行轻量级安装..."
-        apk add --no-cache curl jq sqlite dcron procps bash >/dev/null 2>&1
+        # [修复] 优先尝试 cronie，若失败则回退至系统内置 cron，彻底避免单点依赖拖垮全局
+        apk add --no-cache curl jq sqlite cronie procps bash openssl || apk add --no-cache curl jq sqlite procps bash openssl
         mkdir -p /var/spool/cron/crontabs
         rc-update add crond default >/dev/null 2>&1
         service crond start >/dev/null 2>&1
@@ -175,7 +176,7 @@ if [ ${#MISSING_CMDS[@]} -gt 0 ]; then
         echo -e "\033[33m⚠️ 请手动执行以下安装命令后重新运行本脚本：\033[0m"
         echo -e "  Debian/Ubuntu: \033[36mapt-get update && apt-get install -y --no-install-recommends curl jq sqlite3 cron procps\033[0m"
         echo -e "  CentOS/RHEL:   \033[36myum install -y curl jq sqlite cronie procps-ng\033[0m"
-        echo -e "  Alpine Linux:  \033[36mapk add --no-cache curl jq sqlite dcron procps bash\033[0m"
+        echo -e "  Alpine Linux:  \033[36mapk add --no-cache curl jq sqlite cronie procps bash openssl\033[0m"
         exit 1
     fi
     

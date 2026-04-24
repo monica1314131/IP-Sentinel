@@ -73,7 +73,8 @@ if [ ${#MISSING_CMDS[@]} -gt 0 ]; then
     elif command -v apk >/dev/null 2>&1; then
         # Alpine 本身就是极致精简，无需特殊参数
         echo "Alpine 探测到系统类型为 Alpine Linux，正在执行轻量级安装..."
-        apk add --no-cache curl jq dcron procps python3 bash openssl >/dev/null 2>&1
+        # [修复] 新版 Alpine 已废弃 dcron。优先尝试 cronie，若失败则信任自带 busybox-cron，并移除屏蔽以便暴露报错
+        apk add --no-cache curl jq cronie procps python3 bash openssl || apk add --no-cache curl jq procps python3 bash openssl
         mkdir -p /var/spool/cron/crontabs
         rc-update add crond default >/dev/null 2>&1
         service crond start >/dev/null 2>&1
@@ -90,7 +91,7 @@ if [ ${#MISSING_CMDS[@]} -gt 0 ]; then
         echo -e "\033[33m⚠️ 请根据您的操作系统，手动执行以下安装命令后重新运行本脚本：\033[0m"
         echo -e "  Debian/Ubuntu: \033[36mapt-get update && apt-get install -y --no-install-recommends curl jq cron procps python3 openssl\033[0m"
         echo -e "  CentOS/RHEL:   \033[36myum install -y curl jq cronie procps-ng python3 openssl\033[0m"
-        echo -e "  Alpine Linux:  \033[36mapk add --no-cache curl jq dcron procps python3 bash openssl\033[0m"
+        echo -e "  Alpine Linux:  \033[36mapk add --no-cache curl jq cronie procps python3 bash openssl\033[0m"
         echo -e "  Arch Linux:    \033[36mpacman -Sy curl jq cronie procps-ng python openssl\033[0m"
         exit 1
     fi
