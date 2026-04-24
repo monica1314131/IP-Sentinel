@@ -12,6 +12,7 @@
 
 ## ✨ 核心极客特性 (Core Architecture)
 
+- 📊 **深海声呐全维探针 (Deep Sea Sonar v4.0)**：内嵌强效正则清洗的 JSON 提取引擎，异步生成情报级 IP 质量战报。聚合 Scamalytics、AbuseIPDB 等五大权威防欺诈库，精准嗅探代理/VPN特征、25端口封堵情况及原生流媒体（Netflix/Disney+/TikTok等）解锁状态，并自带 Google “送中”高危预警与基于 SQLite 的历史污染趋势追踪图谱。
 - ⚡ **无损高并发引擎 (WAL Concurrency)**：司令部 SQLite 数据库全面激活 `WAL` (Write-Ahead Logging) 模式与毫秒级排队削峰算法。即使您同时对 500 台边缘节点发起全军总攻，也能完美规避 `database is locked` 与 Telegram `429` 频率拦截，实现 100% 战报送达。
 - 🪶 **抽脂级极简部署 (Zero-Bloat Native)**：全栈剔除 `pip`、`flask` 等臃肿第三方依赖，完全基于 Python3 原生标准库运行。安装底层强制注入 `--no-install-recommends` 防捆绑参数。无论是 128MB 内存的极简 NAT 小鸡，还是 Alpine/Arch Linux 特种系统，均可如丝般顺滑运行。
 - 🎛️ **扁平化指挥矩阵 (Flat Command Matrix)**：[v3.6.1 重构] 引入扁平化 L0-L3 四级战区降维视图与双轨身份制。深度定制 Inline Keyboard 逃生舱交互，支持在统一哨兵终端进行原位丝滑重绘 (In-place UI Edit)，实现毫秒级模块热启停与日志抓取，彻底告别刷屏烦恼。
@@ -34,8 +35,8 @@
 ```text
 📦 IP-Sentinel
  ┣ 📂 .github/workflows/      # 🏭 自动化兵工厂：每月定时触发指纹生成的 CI/CD 流水线
- ┣ 📂 master/                 # 🧠 司令部：SQLite 存储、TG 监听与 Webhook 调度中心
- ┣ 📂 core/                   # 🛡️ 边缘哨兵：Webhook 被动监听、哈希锚定执行引擎
+ ┣ 📂 master/                 # 🧠 司令部：SQLite 存储 (含 ip_trend_log 趋势跟踪表)、TG 监听与 Webhook 调度
+ ┣ 📂 core/                   # 🛡️ 边缘哨兵：Webhook 被动监听、哈希锚定执行引擎 (集成深海声呐探测模块)
  ┣ 📂 scripts/                # 🐍 兵工厂引擎：基于 Python 的多物理分区 UA 生成器
  ┣ 📂 data/                   # 🗂️ 全球数据规则库 (动态拓扑)
  ┃  ┣ 📜 map.json             # 🌍 全球区域大脑 (v3.5.0 大洲战区拓扑)
