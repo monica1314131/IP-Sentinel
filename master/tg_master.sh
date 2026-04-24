@@ -111,24 +111,22 @@ while true; do
             CHAT_ID=$(echo "$UPDATE" | jq -r '.message.chat.id // .callback_query.message.chat.id')
             TEXT=$(echo "$UPDATE" | jq -r '.message.text // .callback_query.data')
 
-            # ================== [v4.0.2 核心: 深海声呐暗号拦截与落盘] ==================
-            if [[ "$TEXT" == *"[SYSTEM_REPORT]|QUALITY|"* ]]; then
-                # 格式: [SYSTEM_REPORT]|QUALITY|NODE_NAME|SCORE|GOOG_STAT|NF_STAT|GPT_STAT
-                REPORT_DATA=$(echo "$TEXT" | grep -o "\[SYSTEM_REPORT\].*")
-                NODE_ID=$(echo "$REPORT_DATA" | cut -d'|' -f3 | tr -cd 'a-zA-Z0-9_.-')
-                SCORE=$(echo "$REPORT_DATA" | cut -d'|' -f4 | tr -cd '0-9')
-                
-                # [v4.0.2 修复] 放弃极端的字母白名单，改用黑名单过滤引号和分号，完美保留中文状态
-                GOOG_ST=$(echo "$REPORT_DATA" | cut -d'|' -f5 | tr -d "\r\n;\"'\`")
-                NF_ST=$(echo "$REPORT_DATA" | cut -d'|' -f6 | tr -d "\r\n;\"'\`")
-                GPT_ST=$(echo "$REPORT_DATA" | cut -d'|' -f7 | tr -d "\r\n;\"'\`")
-                
-                [ -z "$GOOG_ST" ] && GOOG_ST="Unknown"
-                [ -z "$NF_ST" ] && NF_ST="Unknown"
-                [ -z "$GPT_ST" ] && GPT_ST="Unknown"
+            # ================== [v4.0.2 核心: 态势感知按钮一键入库] ==================
+            if [[ "$TEXT" == "svq|"* ]]; then
+                # 格式: svq|NODE_NAME|SCORE|GOOG|NF|GPT
+                IFS='|' read -r MAGIC NODE_ID SCORE GOOG_ST NF_ST GPT_ST <<< "$TEXT"
+                CHAT_ID=$(echo "$CHAT_ID" | tr -cd '0-9-')
                 
                 if [ -n "$NODE_ID" ] && [ -n "$SCORE" ]; then
+                    # 1. 写入 SQLite
                     db_exec "INSERT INTO ip_trend_log (node_name, scam_score, goog_status, nf_status, gpt_status) VALUES ('$NODE_ID', '$SCORE', '$GOOG_ST', '$NF_ST', '$GPT_ST');"
+                    
+                    # 2. 无损修改原消息：移除入库按钮，展示绿勾状态 (不破坏 Markdown 战报原文)
+                    if [ -n "$MSG_ID" ]; then
+                        curl -s --connect-timeout 5 -m 10 -X POST "https://api.telegram.org/bot${TG_TOKEN}/editMessageReplyMarkup" \
+                            -H "Content-Type: application/json" \
+                            -d "{\"chat_id\":\"${CHAT_ID}\",\"message_id\":\"${MSG_ID}\",\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"✅ 此报告已存档\",\"callback_data\":\"ignore\"}]]}}" > /dev/null
+                    fi
                 fi
                 continue
             fi

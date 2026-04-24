@@ -176,18 +176,30 @@ _👉 [🔍 详细信用图谱直达 (Scamalytics)](https://scamalytics.com/ip/$
 SAFE_SCAM_SCORE=$(echo "$SCAM_SCORE" | tr -cd '0-9')
 [ -z "$SAFE_SCAM_SCORE" ] && SAFE_SCAM_SCORE="0"
 
-# [v4.0.2 扩容] 提取 Google(基于YouTube) 和 ChatGPT 的原生状态，供中枢态势感知使用
+# [v4.0.2 扩容] 提取 Google(基于YouTube) 和 ChatGPT 的原生状态
 RAW_GOOG_STAT="${RAW_YT_REG:-$RAW_YT_STAT}"
 [ -z "$RAW_GOOG_STAT" ] && RAW_GOOG_STAT="未知"
 RAW_GPT_STAT=$(echo "$JSON_DATA" | jq -r '.Media.ChatGPT.Status // "未知"' 2>/dev/null)
 
-REPORT="$REPORT
+# 截取前2个中文字符(控制在64字节内)，构建内联按钮数据
+S_GOOG=$(echo "$RAW_GOOG_STAT" | awk '{print substr($0,1,2)}')
+S_NF=$(echo "$RAW_NF_STAT" | awk '{print substr($0,1,2)}')
+S_GPT=$(echo "$RAW_GPT_STAT" | awk '{print substr($0,1,2)}')
+CB_DATA="svq|${NODE_NAME}|${SAFE_SCAM_SCORE}|${S_GOOG}|${S_NF}|${S_GPT}"
 
-\`[SYSTEM_REPORT]|QUALITY|${NODE_NAME}|${SAFE_SCAM_SCORE}|${RAW_GOOG_STAT}|${RAW_NF_STAT}|${RAW_GPT_STAT}\`"
+# 8. 挂载内联键盘并直送指挥部
+JSON_PAYLOAD=$(jq -n \
+  --arg cid "$CHAT_ID" \
+  --arg txt "$REPORT" \
+  --arg cb "$CB_DATA" \
+  '{
+    chat_id: $cid,
+    text: $txt,
+    parse_mode: "Markdown",
+    disable_web_page_preview: true,
+    reply_markup: {
+      inline_keyboard: [[{text: "📥 将本次体检录入趋势库", callback_data: $cb}]]
+    }
+  }')
 
-# 8. 直送指挥部
-curl -s -X POST "${TG_API_URL}" \
-    -d "chat_id=${CHAT_ID}" \
-    -d "parse_mode=Markdown" \
-    -d "disable_web_page_preview=true" \
-    -d "text=${REPORT}" >/dev/null
+curl -s -X POST "${TG_API_URL}" -H "Content-Type: application/json" -d "$JSON_PAYLOAD" >/dev/null
