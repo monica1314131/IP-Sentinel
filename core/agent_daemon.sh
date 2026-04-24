@@ -85,13 +85,22 @@ import os
 import html
 # ================== [v3.0.4 新增密码学与解析依赖] ==================
 import urllib.parse
-import urllib.request  # [修复] 提升至全局作用域，防止局部变量遮蔽
+import urllib.request
 import hmac
 import hashlib
 import time
 # ====================================================================
 
 PORT = int(sys.argv[1])
+
+# 🛡️ 防重放攻击 (Nonce 缓存池)
+USED_SIGNS = {}
+def clean_used_signs():
+    now = time.time()
+    # 清理过期签名 (超 60 秒的安全窗口)
+    expired = [s for s, t in USED_SIGNS.items() if now - t > 65]
+    for s in expired:
+        del USED_SIGNS[s]
 
 # 🛡️ 提取全局鉴权 Token (利用 CHAT_ID 作为 PSK 预共享密钥)
 AUTH_TOKEN = ""
@@ -122,8 +131,9 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                 return
                 
             try:
+                current_time = int(time.time())
                 # 校验 2：时间戳防重放 (误差 ±60秒 内有效，拒绝隔夜抓包重放)
-                if abs(int(time.time()) - int(req_t)) > 60:
+                if abs(current_time - int(req_t)) > 60:
                     self.send_response(401)
                     self.end_headers()
                     self.wfile.write(b"401 Unauthorized: Request Expired\n")
@@ -131,6 +141,14 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
             except ValueError:
                 self.send_response(401)
                 self.end_headers()
+                return
+            
+            # 校验 2.5：基于 60秒 窗口的精确重放拦截 (拦截 MITM 并发洗劫)
+            clean_used_signs()
+            if req_sign in USED_SIGNS:
+                self.send_response(401)
+                self.end_headers()
+                self.wfile.write(b"401 Unauthorized: Replay Attack Detected\n")
                 return
                 
             # 校验 3：HMAC 数据完整性与身份合法性校验
@@ -143,17 +161,20 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b"401 Unauthorized: Signature Mismatch\n")
                 return
+            
+            # 鉴权通过，记录该签名至防重放内存池
+            USED_SIGNS[req_sign] = current_time
 
         # ================== 路由分发 (恢复为安全的精确匹配) ==================
         
-        # 路由 0: 全局统筹调度 (处理 /trigger_run 一键全节点维护)
+        # 路由 0: 全局统筹调度
         if req_path == '/trigger_run':
             if os.path.exists('/opt/ip_sentinel/core/runner.sh'):
                 self.send_response(200)
                 self.send_header("Content-type", "text/plain")
                 self.end_headers()
                 self.wfile.write(b"Action Accepted: runner\n")
-                subprocess.Popen(['bash', '/opt/ip_sentinel/core/runner.sh'])
+                os.system("nohup bash /opt/ip_sentinel/core/runner.sh >/dev/null 2>&1 &")
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -165,7 +186,7 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Content-type", "text/plain")
                 self.end_headers()
                 self.wfile.write(b"Action Accepted: mod_google\n")
-                subprocess.Popen(['bash', '/opt/ip_sentinel/core/mod_google.sh'])
+                os.system("nohup bash /opt/ip_sentinel/core/mod_google.sh >/dev/null 2>&1 &")
             else:
                 self.send_response(403)
                 self.send_header("Content-type", "text/plain")
@@ -179,7 +200,7 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Content-type", "text/plain")
                 self.end_headers()
                 self.wfile.write(b"Action Accepted: mod_trust\n")
-                subprocess.Popen(['bash', '/opt/ip_sentinel/core/mod_trust.sh'])
+                os.system("nohup bash /opt/ip_sentinel/core/mod_trust.sh >/dev/null 2>&1 &")
             else:
                 self.send_response(403)
                 self.send_header("Content-type", "text/plain")
@@ -192,7 +213,7 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-type", "text/plain")
             self.end_headers()
             self.wfile.write(b"Action Accepted: tg_report\n")
-            subprocess.Popen(['bash', '/opt/ip_sentinel/core/tg_report.sh'])
+            os.system("nohup bash /opt/ip_sentinel/core/tg_report.sh >/dev/null 2>&1 &")
 
         # 路由 4: 抓取并回传实时日志
         elif req_path == '/trigger_log':
@@ -249,12 +270,10 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"Action Accepted: trigger_quality\n")
             
-            script_path = '/opt/ip_sentinel/core/mod_quality.sh'
-            if os.path.exists(script_path):
-                # 使用 Popen 且丢弃输入输出，实现绝对的异步脱离，不阻塞 Webhook 主线程
-                subprocess.Popen(['bash', script_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if os.path.exists('/opt/ip_sentinel/core/mod_quality.sh'):
+                os.system("nohup bash /opt/ip_sentinel/core/mod_quality.sh >/dev/null 2>&1 &")
         # =================================================================
-                
+
 
         # 路由 5: 节点重命名展示别名同步接口 (Base64 终极防御版)
         elif req_path == '/trigger_rename':
@@ -401,7 +420,14 @@ class AgentHandler(http.server.BaseHTTPRequestHandler):
                 # [修复] 逃逸 Systemd Cgroup，并引入 bash -n 语法树校验防砖机制
                 import shutil
                 import base64
+                # 动态提取部署时的源地址，废除强制写死 main 分支，保障隔离测试环境
                 repo_url = "https://raw.githubusercontent.com/hotyue/IP-Sentinel/main"
+                if os.path.exists('/opt/ip_sentinel/core/install.sh'):
+                    with open('/opt/ip_sentinel/core/install.sh', 'r') as f:
+                        for line in f:
+                            if line.startswith('REPO_RAW_URL='):
+                                repo_url = line.split('=', 1)[1].strip('"\'')
+                                break
                 
                 # 动态构建报错回执文本 (第一层 Base64 隔离换行与特殊字符)
                 err_msg = f"❌ **OTA 熔断告警**\n📍 节点: `{config_mem.get('NODE_ALIAS', '未知')}`\n⚠️ 原因: 脚本语法校验(bash -n)未通过，下载可能不完整。\n🚀 状态: 升级已取消，节点安全。"
@@ -449,9 +475,18 @@ import socket
 # ================== [v3.0.3 变更: 引入多线程模型抵抗 Slowloris 攻击] ==================
 class ThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True # 开启端口复用，防止热重启时端口冲突
+    
+    # [核心修复] 显式关闭 V6ONLY 参数，治愈大量云主机纯双栈下的 IPv4 耳聋现象
+    def server_bind(self):
+        if self.address_family == socket.AF_INET6:
+            try:
+                self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            except Exception:
+                pass
+        super().server_bind()
 
 try:
-    # 1. 优先尝试监听双栈/IPv6 (大多数 Linux 默认支持 IPv4 映射接入)
+    # 1. 优先尝试监听双栈/IPv6
     ThreadedServer.address_family = socket.AF_INET6
     httpd = ThreadedServer(("::", PORT), AgentHandler)
 except Exception:
