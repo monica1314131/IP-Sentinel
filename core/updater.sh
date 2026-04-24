@@ -134,6 +134,17 @@ if [ -n "$REGION_JSON_FILE" ] && [ -f "$REGION_JSON_FILE" ]; then
 fi
 
 # ==========================================================
+# 5.5. 容灾更新深海声呐底层探针 (彻底消除第三方 RCE 依赖)
+# ==========================================================
+TMP_PROBE="/tmp/ip_sentinel_probe.sh"
+$CURL_CMD "https://raw.githubusercontent.com/xykt/IPQuality/main/ip.sh" -o "$TMP_PROBE"
+if [ -s "$TMP_PROBE" ]; then
+    mv "$TMP_PROBE" "${INSTALL_DIR}/core/ip_probe.sh"
+    chmod +x "${INSTALL_DIR}/core/ip_probe.sh"
+    log "Updater" "INFO " "✅ 深海声呐底层探针 (ip_probe.sh) 源文件安全对齐"
+fi
+
+# ==========================================================
 # 6. 日志防满瘦身机制 (保留最近 2000 行)
 # ==========================================================
 if [ -f "$LOG_FILE" ]; then

@@ -91,7 +91,8 @@ fi
 if [ -n "$TARGET_MOD" ] && [ -x "${INSTALL_DIR}/core/${TARGET_MOD}" ]; then
     log "SYSTEM" "INFO" "命中触发条件，加载并执行子模块: ${MOD_NAME}"
     # 核心降耗逻辑：使用 nice -n 19 赋予进程最低 CPU 优先级，绝不抢占 VPS 正常业务的资源
-    nice -n 19 bash "${INSTALL_DIR}/core/${TARGET_MOD}"
+    # [安全修复] 注入 200>&-，强行关闭子进程对排他锁的继承权！防止子进程假死导致全局死锁
+    nice -n 19 bash "${INSTALL_DIR}/core/${TARGET_MOD}" 200>&-
 else
     log "SYSTEM" "ERROR" "配置了模块 ${MOD_NAME}，但未找到对应的可执行脚本: ${TARGET_MOD}"
 fi
