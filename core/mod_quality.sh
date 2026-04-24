@@ -5,9 +5,6 @@
 
 source /opt/ip_sentinel/config.conf
 
-# [恢复被误删的变量] 提取纯净公网 IP，专门用于战报底部的 Scamalytics 直达链接
-TARGET_IP=$(echo "${PUBLIC_IP:-$BIND_IP}" | tr -d '[]')
-
 # ==========================================
 # 1. 动态网络锚定与协议自适应 (专为多 IP / NAT 架构打造)
 # ==========================================
@@ -139,6 +136,8 @@ fi
 # 提取本地运行态版本与生成时间戳
 LOCAL_VER="${AGENT_VERSION:-未知}"
 CURRENT_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+# [核心修复] 抛弃本地残缺配置，直接提取探针刚刚实测拿到的真实出口 IP 拼接链接！
+LINK_IP=$(echo "$IP_ADDR" | tr -d '[]')
 
 REPORT="🎯 *IP-Sentinel 深海声呐报告*
 📍 节点：\`${NODE_ALIAS}\`
@@ -169,7 +168,7 @@ REPORT="🎯 *IP-Sentinel 深海声呐报告*
 • **25 端口出站:** ${P25_TEXT}
 • **DNS 污染库:** 严重 \`${DNS_BLACK}\` | 轻微 \`${DNS_MARK}\`
 
-_👉 [🔍 详细信用图谱直达 (Scamalytics)](https://scamalytics.com/ip/${TARGET_IP})_
+_👉 [🔍 详细信用图谱直达 (Scamalytics)](https://scamalytics.com/ip/${LINK_IP})_
 
 ⏱️ \`${CURRENT_TIME}\` | ⚙️ \`v${LOCAL_VER}\`"
 
