@@ -16,8 +16,8 @@ if [[ -n "$BIND_IP" && "$BIND_IP" =~ ^[0-9a-fA-F:\[\]\.]+$ ]]; then
     RAW_BIND_IP=$(echo "$BIND_IP" | tr -d '[]')
     # 严格探测物理网卡/虚拟 IP 存活状态，防止 IP 漂移导致探针彻底报错
     if ip addr show 2>/dev/null | grep -qw "$RAW_BIND_IP"; then
-        # 核心：精准锁定多 IP 机器的出口网卡，指哪打哪
-        PROBE_ARGS+=("-i" "$RAW_BIND_IP")
+        # 核心：放弃检测脚本不可靠的传参，准备在底层进行函数级劫持
+        BIND_READY="true"
         
         # 智能识别 V4 / V6，强制覆盖系统默认的 IP_PREF
         if [[ "$RAW_BIND_IP" == *":"* ]]; then
@@ -28,7 +28,7 @@ if [[ -n "$BIND_IP" && "$BIND_IP" =~ ^[0-9a-fA-F:\[\]\.]+$ ]]; then
     fi
 fi
 
-# 补齐协议版本参数 (-4 或 -6)
+# 补齐协议版本参数 (-4 或 -6)，强行锁定测试目标网域
 PROBE_ARGS+=("-${DYNAMIC_IP_PREF}")
 
 # 2. 静默拉取原始数据 (消除短链接 RCE 劫持风险，收编为本地固化执行)
@@ -39,11 +39,58 @@ if [ ! -x "$PROBE_SCRIPT" ]; then
     chmod +x "$PROBE_SCRIPT" 2>/dev/null
 fi
 
+# ==========================================
+# 🛑 [核心战术] 幽灵网卡劫持 v2 (PATH 物理覆写版)
+# 解决 Alpine/Busybox 下 export 无法穿透 timeout 子进程的痛点
+# ==========================================
+if [ "$BIND_READY" == "true" ]; then
+    REAL_CURL=$(command -v curl)
+    REAL_WGET=$(command -v wget)
+    HIJACK_DIR="/tmp/ip_sentinel_hijack_$$"
+    mkdir -p "$HIJACK_DIR"
+    
+    # 伪造 curl 拦截器
+    cat > "$HIJACK_DIR/curl" << EOF
+#!/bin/bash
+if [[ "\$*" == *"localhost"* || "\$*" == *"127.0.0.1"* ]]; then
+    exec $REAL_CURL "\$@"
+else
+    exec $REAL_CURL --interface "$RAW_BIND_IP" "\$@"
+fi
+EOF
+    chmod +x "$HIJACK_DIR/curl"
+
+    # 伪造 wget 拦截器
+    cat > "$HIJACK_DIR/wget" << EOF
+#!/bin/bash
+if [[ "\$*" == *"localhost"* || "\$*" == *"127.0.0.1"* ]]; then
+    exec $REAL_WGET "\$@"
+else
+    exec $REAL_WGET --bind-address="$RAW_BIND_IP" "\$@"
+fi
+EOF
+    chmod +x "$HIJACK_DIR/wget"
+
+    # 篡改系统环境变量，强行将伪造目录提权到最优先级
+    export PATH="$HIJACK_DIR:$PATH"
+fi
+
 # 采用本地执行，将动态参数阵列展开，彻底封死外部投毒与 NAT 死锁陷阱
 RAW_OUTPUT=$(timeout 180 bash "$PROBE_SCRIPT" "${PROBE_ARGS[@]}" 2>/dev/null)
 
+if [ "$BIND_READY" == "true" ]; then
+    # 事了拂衣去，销毁伪造的命令工厂
+    rm -rf "$HIJACK_DIR"
+fi
+
 # 2. 极致截取 JSON (无视开头的赞助商广告与不可见字符，精准提取)
 JSON_DATA="{${RAW_OUTPUT#*\{}"
+
+# [v4.0.3 核心抢修: 强力去污粉] 专门针对 Alpine/Busybox 等轻量级环境！
+# 底层探测脚本的正则去色在 Alpine 上会失效，导致 ANSI 控制符混入 JSON。
+# 必须在此处彻底清洗真实的 ESC 字符与字面量 x1b，否则会导致 TG API 静默拒收！
+ESC=$(printf '\033')
+JSON_DATA=$(printf "%s" "$JSON_DATA" | sed -e "s/${ESC}\[[0-9;]*[a-zA-Z]//g" -e "s/${ESC}[0-9;]*[a-zA-Z]//g" -e "s/x1b\\[[0-9;]*[a-zA-Z]//g" -e "s/x1b[0-9;]*[a-zA-Z]//g")
 
 # 2. 提取基础物理定位与身份特征 (兼作合法性校验)
 IP_ADDR=$(echo "$JSON_DATA" | jq -r '.Head.IP // empty' 2>/dev/null)
@@ -129,7 +176,8 @@ DNS_MARK=$(echo "$JSON_DATA" | jq -r '.Mail.DNSBlacklist.Marked // "0"' 2>/dev/n
 WARNING_MSG=""
 # [修复] 官方 JSON 已经去除了方括号，直接匹配 CN 或者状态包含中国
 if [[ "$RAW_YT_REG" == "CN" ]] || [[ "$RAW_YT_STAT" == *"中国"* ]]; then
-    WARNING_MSG="%0A🚨 **[高危] 该节点已被 Google 判定为中国大陆 (送中)！**%0A"
+    # [修复] 适配 JSON Payload，采用标准换行符 \n
+    WARNING_MSG="\n🚨 **[高危] 该节点已被 Google 判定为中国大陆 (送中)！**\n"
 fi
 
 # 7. 组装情报级 Markdown 战报

@@ -768,22 +768,34 @@ EOF
         systemctl enable --now ip-sentinel-report.timer
         systemctl enable --now ip-sentinel-agent-daemon.service
     fi
-else
-    echo "💡 未检测到 Systemd (可能是 Alpine Linux)，回退到 Cron 调度模式..."
-    crontab -l 2>/dev/null | grep -v "ip_sentinel" > /tmp/cron_backup || true
-    echo "*/30 * * * * ${INSTALL_DIR}/core/runner.sh >/dev/null 2>&1" >> /tmp/cron_backup
-    echo "0 3 * * * ${INSTALL_DIR}/core/updater.sh >/dev/null 2>&1" >> /tmp/cron_backup
-    
-    if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
-        echo "0 8 * * * ${INSTALL_DIR}/core/tg_report.sh >/dev/null 2>&1" >> /tmp/cron_backup
-        echo "$SAFE_PUBLIC_IP" > "${INSTALL_DIR}/core/.last_ip"
-        echo "@reboot nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" >> /tmp/cron_backup
-        echo "* * * * * nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" >> /tmp/cron_backup
-        nohup bash "${INSTALL_DIR}/core/agent_daemon.sh" >/dev/null 2>&1 &
+    else
+        echo "💡 未检测到 Systemd，正在配置备用调度器 (兼容 Alpine/OpenRC)..."
+        crontab -l 2>/dev/null | grep -v "ip_sentinel" > /tmp/cron_backup || true
+        echo "*/30 * * * * ${INSTALL_DIR}/core/runner.sh >/dev/null 2>&1" >> /tmp/cron_backup
+        echo "0 3 * * * ${INSTALL_DIR}/core/updater.sh >/dev/null 2>&1" >> /tmp/cron_backup
+        
+        if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
+            echo "0 8 * * * ${INSTALL_DIR}/core/tg_report.sh >/dev/null 2>&1" >> /tmp/cron_backup
+            echo "$SAFE_PUBLIC_IP" > "${INSTALL_DIR}/core/.last_ip"
+            
+            # [核心抢修] 智能探测 OpenRC 环境，注入原生 local.d 启动项，彻底抛弃不可靠的 @reboot
+            if command -v rc-update >/dev/null 2>&1 && [ -d "/etc/local.d" ]; then
+                echo "nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" > /etc/local.d/ip_sentinel.start
+                chmod +x /etc/local.d/ip_sentinel.start
+                rc-update add local default >/dev/null 2>&1
+            else
+                # 老旧 SysVinit 或极简环境的传统兜底
+                echo "@reboot nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" >> /tmp/cron_backup
+            fi
+            
+            # [核心修复] 强化 Cron 看门狗：严谨探测进程，防无限 fork 风暴
+            echo "* * * * * pgrep -f 'webhook.py' >/dev/null || nohup bash ${INSTALL_DIR}/core/agent_daemon.sh >/dev/null 2>&1 &" >> /tmp/cron_backup
+            
+            nohup bash "${INSTALL_DIR}/core/agent_daemon.sh" >/dev/null 2>&1 &
+        fi
+        [ -f /tmp/cron_backup ] && crontab /tmp/cron_backup 2>/dev/null
+        rm -f /tmp/cron_backup
     fi
-    [ -f /tmp/cron_backup ] && crontab /tmp/cron_backup 2>/dev/null
-    rm -f /tmp/cron_backup
-fi
 
 # ================== [v3.4.0 核心: 状态机驱动的热更新路由] ==================
 if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
