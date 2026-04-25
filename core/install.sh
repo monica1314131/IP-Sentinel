@@ -797,31 +797,34 @@ if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
         [ -z "$OLD_VERSION" ] && OLD_VERSION="3.3.1"
         
         # [路由表 1]: 跨代兼容 (老版本 < v3.3.2)
-        # 必须强制下发带有 #REGISTER# 的警告，引导长官重新同步哈希身份
         if version_lt "$OLD_VERSION" "3.3.2"; then
             echo -e "\n📡 [路由枢纽] 正在执行跨代架构重组 (v${OLD_VERSION} -> v${TARGET_VERSION})..."
-            curl -s -X POST "${TG_API_URL}" \
-                -d "chat_id=${CHAT_ID}" \
-                -d "parse_mode=Markdown" \
-                -d "text=✨ *IP-Sentinel 引擎热更新完成！*
+            TEXT_MSG="✨ *IP-Sentinel 引擎热更新完成！*
 📍 节点：\`${NODE_ALIAS}\`
 🌐 IP：\`${SAFE_PUBLIC_IP}\`
 🚀 状态：v${TARGET_VERSION} OTA 动态活体引擎已部署
 
 ⚠️ *战区架构已重组，请务必点击下方指令并发送，以同步新的防撞档案：*
-\`${REG_MSG}\`" >/dev/null 2>&1
+\`${REG_MSG}\`"
+            
+            # [v4.0.3 体验升级] 注入交互式控制台按钮
+            JSON_PAYLOAD=$(jq -n --arg cid "$CHAT_ID" --arg txt "$TEXT_MSG" --arg cb "manage:${NODE_NAME}" '{chat_id: $cid, text: $txt, parse_mode: "Markdown", reply_markup: {inline_keyboard: [[{text: "⚙️ 调出该节点控制台", callback_data: $cb}]]}}')
+            curl -s -X POST "${TG_API_URL}" -H "Content-Type: application/json" -d "$JSON_PAYLOAD" >/dev/null 2>&1
+            
             echo -e "\033[32m✅ 升级通知已推送！请前往 TG 点击注册指令完成身份同步！\033[0m"
             
         # [路由表 2]: 现代静默升级 (老版本 >= v3.3.2)
         else
             echo -e "\n📡 [路由枢纽] 正在执行静默平滑升级 (v${OLD_VERSION} -> v${TARGET_VERSION})..."
-            curl -s -X POST "${TG_API_URL}" \
-                -d "chat_id=${CHAT_ID}" \
-                -d "parse_mode=Markdown" \
-                -d "text=✨ *IP-Sentinel 引擎热更新完成！*
+            TEXT_MSG="✨ *IP-Sentinel 引擎热更新完成！*
 📍 节点：\`${NODE_ALIAS}\`
 🌐 IP：\`${SAFE_PUBLIC_IP}\`
-🚀 状态：v${TARGET_VERSION} OTA 动态活体引擎已部署" >/dev/null 2>&1
+🚀 状态：v${TARGET_VERSION} OTA 动态活体引擎已部署"
+
+            # [v4.0.3 体验升级] 注入交互式控制台按钮
+            JSON_PAYLOAD=$(jq -n --arg cid "$CHAT_ID" --arg txt "$TEXT_MSG" --arg cb "manage:${NODE_NAME}" '{chat_id: $cid, text: $txt, parse_mode: "Markdown", reply_markup: {inline_keyboard: [[{text: "⚙️ 调出该节点控制台", callback_data: $cb}]]}}')
+            curl -s -X POST "${TG_API_URL}" -H "Content-Type: application/json" -d "$JSON_PAYLOAD" >/dev/null 2>&1
+
             echo -e "\033[32m✅ 升级成功通知已推送到您的 Telegram！\033[0m"
         fi
         
@@ -836,16 +839,17 @@ if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
     else
         # [全新安装路由]
         echo -e "\n📡 正在向指挥部发送注册暗号..."
-        PUSH_RESULT=$(curl -s -X POST "${TG_API_URL}" \
-            -d "chat_id=${CHAT_ID}" \
-            -d "parse_mode=Markdown" \
-            -d "text=✨ *IP-Sentinel 部署成功！*
+        TEXT_MSG="✨ *IP-Sentinel 部署成功！*
 📍 区域：${REGION_NAME}
 🌐 IP：${SAFE_PUBLIC_IP}
 🔌 端口：${AGENT_PORT}
 
 🔑 *请点击下方指令复制并回复给机器人：*
-\`${REG_MSG}\`")
+\`${REG_MSG}\`"
+
+        # [v4.0.3 体验升级] 注入交互式控制台按钮
+        JSON_PAYLOAD=$(jq -n --arg cid "$CHAT_ID" --arg txt "$TEXT_MSG" --arg cb "manage:${NODE_NAME}" '{chat_id: $cid, text: $txt, parse_mode: "Markdown", reply_markup: {inline_keyboard: [[{text: "⚙️ 调出该节点控制台", callback_data: $cb}]]}}')
+        PUSH_RESULT=$(curl -s -X POST "${TG_API_URL}" -H "Content-Type: application/json" -d "$JSON_PAYLOAD")
 
         if echo "$PUSH_RESULT" | grep -q '"ok":true'; then
             echo -e "\033[32m✅ 注册信息已推送到您的 Telegram，请按指令完成最终激活！\033[0m"
