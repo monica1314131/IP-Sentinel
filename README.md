@@ -57,11 +57,12 @@
 > ☢️ **核按钮系统已就绪**：采用私有部署，您将解锁 **OTA 远程静默升级** 权限！所有私有前线节点均可通过您的 TG 面板实现一键全网代码热重载换代！
 
 - **部署 Master (中枢大脑)**：找一台 VPS 作为司令部（仅需部署一台），执行：
+- [官方部署教程](https://blog.iot-architect.com/engineering-practice/ip-sentinel-master-deployment-guide/)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hotyue/IP-Sentinel/main/master/install_master.sh -o /tmp/ins_master.sh && sudo bash /tmp/ins_master.sh
 ```
 - 部署 Agent (边缘哨兵)：在需要养护的机器上执行 Agent 脚本，安装时选择私有独立中枢，并分别输入您自建机器人的 [Token](https://blog.iot-architect.com/engineering-practice/create-private-telegram-bot-via-botfather) 以及您的个人 [Chat ID](https://blog.iot-architect.com/engineering-practice/get-telegram-personal-id-via-userinfobot) ：
-
+- [官方部署教程](https://blog.iot-architect.com/engineering-practice/ip-sentinel-installation-and-upgrade-guide/)
 ```Bash
 curl -fsSL https://raw.githubusercontent.com/hotyue/IP-Sentinel/main/core/install.sh -o /tmp/ins_agent.sh && sudo bash /tmp/ins_agent.sh
 ```
@@ -73,7 +74,7 @@ curl -fsSL https://raw.githubusercontent.com/hotyue/IP-Sentinel/main/core/instal
 - 关注机器人：在 TG 中关注官方安全网关 [@OmniBeacon_bot](https://t.me/OmniBeacon_bot) 并发送 /start。
 
 - 部署 Agent：在目标 VPS 上执行以下指令，安装过程中选择官方公共网关，并输入您的 Chat ID：
-
+- [官方部署教程](https://blog.iot-architect.com/engineering-practice/ip-sentinel-installation-and-upgrade-guide/)
 ```Bash
 curl -fsSL https://raw.githubusercontent.com/hotyue/IP-Sentinel/main/core/install.sh -o /tmp/ins_agent.sh && sudo bash /tmp/ins_agent.sh
 ```
