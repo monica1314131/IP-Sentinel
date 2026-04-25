@@ -128,6 +128,10 @@ bash <(curl -sL https://raw.githubusercontent.com/hotyue/IP-Sentinel/legacy/core
 
 如果你想为项目增加新的节点区域（例如德国、英国、大洋洲等），或者提供更丰富的本土化搜索词库，非常欢迎提交 Pull Request！
 
+**感谢@xykt **
+
+- 本项目IP质量检测采用[xykt/IPQuality](https://github.com/xykt/IPQuality) 脚本！
+
 **💡 全球节点贡献规范：**
 1. 在 `data/regions/国家代码/省州代码/` 目录下新增对应城市的配置 `.json`。
 2. 在 `data/keywords/` 目录下新增或完善配套国家的词库 `kw_XX.txt`。
