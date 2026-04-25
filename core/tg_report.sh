@@ -200,11 +200,24 @@ else
 💡 *哨兵正在后台默默守护您的资产。*"
 fi
 
-# 5. 调用 API 推送 (接入安全网关)
+# 5. 调用 API 推送 (接入安全网关，挂载交互式控制台按钮)
+JSON_PAYLOAD=$(jq -n \
+  --arg cid "$CHAT_ID" \
+  --arg txt "$MSG" \
+  --arg cb "manage:${NODE_NAME}" \
+  '{
+    chat_id: $cid,
+    text: $txt,
+    parse_mode: "Markdown",
+    disable_web_page_preview: true,
+    reply_markup: {
+      inline_keyboard: [[{text: "⚙️ 调出该节点控制台", callback_data: $cb}]]
+    }
+  }')
+
 RESPONSE=$(curl -s -m 10 -X POST "${TG_API_URL}" \
-    -d "chat_id=${CHAT_ID}" \
-    -d "text=${MSG}" \
-    -d "parse_mode=Markdown")
+    -H "Content-Type: application/json" \
+    -d "$JSON_PAYLOAD")
 
 if [[ "$RESPONSE" != *"\"ok\":true"* ]]; then
     echo "❌ 战报发送失败！API 响应: $RESPONSE" >> "${INSTALL_DIR}/logs/error.log"
