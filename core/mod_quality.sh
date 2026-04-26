@@ -9,7 +9,7 @@ source /opt/ip_sentinel/config.conf
 # 1. 动态网络锚定与协议自适应 (专为多 IP / NAT 架构打造)
 # ==========================================
 DYNAMIC_IP_PREF="${IP_PREF:-4}"
-PROBE_ARGS=("-y" "-j" "-f") # 默认注入: 自动确认、JSON格式、明文无掩码IP
+PROBE_ARGS=("-y" "-j") # 默认注入: 自动确认、JSON格式
 
 # 强壮正则：支持 V4, V6 以及带有 [] 护甲的 V6 (兼容多 IP 站群机)
 if [[ -n "$BIND_IP" && "$BIND_IP" =~ ^[0-9a-fA-F:\[\]\.]+$ ]]; then
@@ -62,7 +62,7 @@ execute_probe "${PROBE_ARGS[@]}"
 # 如果打靶失败 (无 IP 回波)，且身上带着 -i 枷锁，极大概率是复杂路由 (如 WARP) 导致的死锁！
 if [ -z "$IP_ADDR" ] && [[ "${PROBE_ARGS[*]}" == *"-i"* ]]; then
     # 卸下 -i 物理枷锁，交由系统内核自主寻找最优路由，进行第二次抢救性探测
-    FALLBACK_ARGS=("-y" "-j" "-f" "-${DYNAMIC_IP_PREF}")
+    FALLBACK_ARGS=("-y" "-j" "-${DYNAMIC_IP_PREF}")
     execute_probe "${FALLBACK_ARGS[@]}"
 fi
 
@@ -155,8 +155,8 @@ fi
 # 提取本地运行态版本与生成时间戳
 LOCAL_VER="${AGENT_VERSION:-未知}"
 CURRENT_TIME=$(date "+%Y-%m-%d %H:%M:%S")
-# [核心修复] 抛弃本地残缺配置，直接提取探针刚刚实测拿到的真实出口 IP 拼接链接！
-LINK_IP=$(echo "$IP_ADDR" | tr -d '[]')
+# [体验修复] 探针返回的 IP 带有星号掩码，强制使用中枢下发的真实 IP 拼接，以防直达链接失效！
+LINK_IP=$(echo "$PUBLIC_IP" | tr -d '[]')
 
 REPORT="🎯 *IP-Sentinel 深海声呐报告*
 📍 节点：\`${NODE_ALIAS}\`
