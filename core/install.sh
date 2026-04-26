@@ -692,8 +692,8 @@ EOF
 [Unit]
 Description=Timer for IP-Sentinel Runner Service
 [Timer]
-OnActiveSec=10s
-OnUnitActiveSec=30min
+# [修复] 彻底剔除 OnActiveSec=10s，改用严格的日历整点/半点匹配，杜绝 OTA 瞬间的并发走火！
+OnCalendar=*:00/30
 RandomizedDelaySec=180
 Persistent=true
 Unit=ip-sentinel-runner.service
