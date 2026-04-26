@@ -52,34 +52,56 @@ if [ ! -s "$PROBE_SCRIPT" ]; then
     chmod +x "$PROBE_SCRIPT" 2>/dev/null
 fi
 
-# 封装打靶与清洗逻辑为函数
-execute_probe() {
-    IP_ADDR=""
-    JSON_DATA=""
-    RAW_OUTPUT=$(timeout 180 bash "$PROBE_SCRIPT" "$@" 2>/dev/null)
-    JSON_DATA="{${RAW_OUTPUT#*\{}"
-    ESC=$(printf '\033')
-    JSON_DATA=$(printf "%s" "$JSON_DATA" | sed -e "s/${ESC}\[[0-9;]*[a-zA-Z]//g" -e "s/${ESC}[0-9;]*[a-zA-Z]//g" -e "s/x1b\\[[0-9;]*[a-zA-Z]//g" -e "s/x1b[0-9;]*[a-zA-Z]//g")
-    IP_ADDR=$(echo "$JSON_DATA" | jq -r '.Head.IP // empty' 2>/dev/null)
+# ==========================================
+# 3. 极速预检与容灾打靶系统
+# ==========================================
+
+# 封装链路预检函数 (4秒极速探路，拒绝死等)
+preflight_check() {
+    local curl_args=("-s" "-m" "4")
+    # 提取网卡和协议约束
+    for ((i=1; i<=$#; i++)); do
+        if [[ "${!i}" == "-i" ]]; then
+            local next=$((i+1))
+            curl_args+=("--interface" "${!next}")
+        elif [[ "${!i}" == "-4" ]]; then
+            curl_args+=("-4")
+        elif [[ "${!i}" == "-6" ]]; then
+            curl_args+=("-6")
+        fi
+    done
+    # 验证该路由设置是否能成功连通外部网络
+    curl "${curl_args[@]}" "https://www.cloudflare.com/cdn-cgi/trace" >/dev/null 2>&1
+    return $?
 }
 
-# 🚀 首轮实弹打靶 (严格遵守 BIND_IP 与动态协议配置)
-execute_probe "${PROBE_ARGS[@]}"
-
-# 🚑 容灾阶梯 1：剥离物理网卡枷锁
-# 针对多 IP 站群机，如果 -i 参数导致 WARP 等复杂路由死锁
-if [ -z "$IP_ADDR" ] && [[ "${PROBE_ARGS[*]}" == *"-i"* ]]; then
+# 📡 寻路雷达：测定哪一组参数可以走通
+FINAL_ARGS=()
+if preflight_check "${PROBE_ARGS[@]}"; then
+    # 阶梯 0: 原定参数 (带 BIND_IP 和协议) 通畅
+    FINAL_ARGS=("${PROBE_ARGS[@]}")
+else
+    # 阶梯 1: 剥离物理网卡限制，只保留协议限制
     FALLBACK_ARGS=("-y" "-j" "-${DYNAMIC_IP_PREF}")
-    execute_probe "${FALLBACK_ARGS[@]}"
+    if preflight_check "${FALLBACK_ARGS[@]}"; then
+        FINAL_ARGS=("${FALLBACK_ARGS[@]}")
+    else
+        # 阶梯 2: 终极裸跑 (不限网卡，不限协议)
+        FINAL_ARGS=("-y" "-j")
+    fi
 fi
 
-# 🚑 容灾阶梯 2：终极裸跑抢救
-# 针对 EUSERV 这种极端机器，强加协议参数 (-4/-6) 可能反而导致探针内部测速路由瘫痪。
-# 彻底退化为最原始的无参状态，完全交由系统内核自主决断
-if [ -z "$IP_ADDR" ]; then
-    NAKED_ARGS=("-y" "-j")
-    execute_probe "${NAKED_ARGS[@]}"
-fi
+# ==========================================
+# 4. 终极实弹打靶
+# ==========================================
+
+# 此时 FINAL_ARGS 已经被证实是连通的，我们只执行 1 次 ip.sh
+# 将超时放宽至 300 秒，给第三方 API (如 ipregistry) 充足的响应时间
+RAW_OUTPUT=$(timeout 300 bash "$PROBE_SCRIPT" "${FINAL_ARGS[@]}" 2>/dev/null)
+JSON_DATA="{${RAW_OUTPUT#*\{}"
+ESC=$(printf '\033')
+JSON_DATA=$(printf "%s" "$JSON_DATA" | sed -e "s/${ESC}\[[0-9;]*[a-zA-Z]//g" -e "s/${ESC}[0-9;]*[a-zA-Z]//g" -e "s/x1b\\[[0-9;]*[a-zA-Z]//g" -e "s/x1b[0-9;]*[a-zA-Z]//g")
+IP_ADDR=$(echo "$JSON_DATA" | jq -r '.Head.IP // empty' 2>/dev/null)
 
 if [ -z "$IP_ADDR" ]; then
     curl -s -X POST "${TG_API_URL}" \
