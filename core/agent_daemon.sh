@@ -40,24 +40,15 @@ else
 fi
 
 if [ -n "$AGENT_IP" ]; then
-    # --- [重点升级 2: 智能防打扰注册机制] ---
     LAST_IP=""
     [ -f "$IP_CACHE" ] && LAST_IP=$(cat "$IP_CACHE" | tr -d '[:space:]')
 
-    # 只有当这是第一次运行，或者公网 IP 发生变动时，才发送 Telegram 申请
     if [ "$AGENT_IP" != "$LAST_IP" ]; then
-        # [v3.6.0 核心修复] 携带 7 字段身份发起注册申请 (追加 ENABLE_OTA，防止 IP 变动重新注册时丢失 OTA 权限)
-        REG_MSG="👋 **[边缘节点接入申请]**%0A大区: \`${REGION_CODE}\`%0A节点: \`${NODE_ALIAS}\`%0A地址: \`${AGENT_IP}:${AGENT_PORT}\`%0A%0A⚠️ **安全验证**: 为防止非法节点接入，请长按复制下方代码，并**发送给我**以完成最终授权录入：%0A%0A\`#REGISTER#|${REGION_CODE}|${NODE_NAME}|${AGENT_IP}|${AGENT_PORT}|${NODE_ALIAS}|${ENABLE_OTA:-false}\`"
-        
-        curl -s -m 5 -X POST "${TG_API_URL}" \
-            -d "chat_id=${CHAT_ID}" \
-            -d "text=${REG_MSG}" \
-            -d "parse_mode=Markdown" > /dev/null
-        
-        echo "✅ [Agent] 已向司令部发送接入申请，请在 Telegram 手机端完成授权！"
+        # [静音手术] 仅在本地静默更新 IP 缓存，彻底切除重复的 TG 发信逻辑，做沉默的守夜人
         echo "$AGENT_IP" > "$IP_CACHE"
+        echo "ℹ️ [Agent] 发现本地 IP 变动，已静默更新缓存: $AGENT_IP"
     else
-        echo "ℹ️ [Agent] IP 未变动 ($AGENT_IP)，跳过重复注册申请。"
+        echo "ℹ️ [Agent] IP 未变动 ($AGENT_IP)，继续后台静默监听。"
     fi
 fi
 
