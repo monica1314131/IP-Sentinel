@@ -35,7 +35,7 @@ PROBE_ARGS+=("-${DYNAMIC_IP_PREF}")
 PROBE_SCRIPT="/opt/ip_sentinel/core/ip_probe.sh"
 
 # [校验 1] 验证本地残留脚本是否损坏 (防止之前被墙或拦截返回了 HTML 报错页)
-if ! grep -q "xykt" "$PROBE_SCRIPT" 2>/dev/null; then
+if [ -f "$PROBE_SCRIPT" ] && ! grep -q "xykt" "$PROBE_SCRIPT" 2>/dev/null; then
     rm -f "$PROBE_SCRIPT"
 fi
 
@@ -45,7 +45,7 @@ if [ ! -s "$PROBE_SCRIPT" ]; then
     
     # 🚑 文件防伪校验: 如果纯 V6 无法解析 GitHub 返回了 HTML 报错页，剔除它！
     if ! grep -q "xykt" "$PROBE_SCRIPT" 2>/dev/null; then
-        rm -f "$PROBE_SCRIPT"
+        rm -f "$PROBE_SCRIPT" 2>/dev/null
         # 降级到双栈 CDN 节点兜底 (仅在 GitHub 彻底失效时启用)
         curl -sL -m 15 "https://IP.Check.Place" -o "$PROBE_SCRIPT" 2>/dev/null
     fi
@@ -54,6 +54,8 @@ fi
 
 # 封装打靶与清洗逻辑为函数
 execute_probe() {
+    IP_ADDR=""
+    JSON_DATA=""
     RAW_OUTPUT=$(timeout 180 bash "$PROBE_SCRIPT" "$@" 2>/dev/null)
     JSON_DATA="{${RAW_OUTPUT#*\{}"
     ESC=$(printf '\033')
