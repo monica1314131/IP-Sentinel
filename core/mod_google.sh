@@ -171,16 +171,24 @@ for ((i=1; i<=TOTAL_ACTIONS; i++)); do
     fi
 done
 
-# --- [结果纠偏自检 (V4.0.3 终极真理版: 穿透 Google 真实 GeoIP 数据库)] ---
-# 彻底抛弃不可靠的前端 URL 重定向判定 (解决 Issue #35 和 #14 的假阳性问题)
-# 战术揭秘：Google 与 YouTube 共享绝对一致的底层 GeoIP 库。
-# 我们直接抓取 YouTube 源码内部的 "GL" (Geo-Location) 环境变量，拿到 Google 视角的 2 位国家代码！
+# --- [结果纠偏自检 (V4.0.6 综合雷达版: 双核交叉验证)] ---
+# 战术揭秘：彻底抛弃单点依赖！结合 Google Maps 极度严格的法律测绘边界重定向，
+# 以及 YouTube 媒体版权风控底层变量，进行多维度综合宣判。
 
-log "$MODULE_NAME" "INFO " "正在穿透获取 Google 底层真实 GeoIP 锚点..."
-YT_HTML=$(curl $CURL_BIND_OPT $DYNAMIC_IP_PREF -m 15 -s -L https://www.youtube.com)
+log "$MODULE_NAME" "INFO " "启动双核交叉验证 (Google Maps + YouTube) 穿透获取真实 GeoIP..."
 
-# 精准正则提取 "GL":"XX" 中的两位字母 (完美兼容所有老旧系统环境)
-REAL_REGION=$(echo "$YT_HTML" | grep -o '"GL":"[A-Za-z]\{2\}"' | head -n 1 | cut -d'"' -f4 | tr 'a-z' 'A-Z')
+# 核心 1: Google Maps 法律边界重定向探测 (提取 Header 里的 gl=XX 参数)
+MAPS_HDR=$(curl $CURL_BIND_OPT $DYNAMIC_IP_PREF -m 10 -sI "https://www.google.com/maps")
+MAPS_GL=$(echo "$MAPS_HDR" | grep -i "^location:" | grep -o 'gl=[A-Za-z]\{2\}' | head -n 1 | cut -d'=' -f2 | tr 'a-z' 'A-Z')
+
+# 核心 2: YouTube 媒体版权风控探测 (提取最深层的 countryCode)
+YT_HTML=$(curl $CURL_BIND_OPT $DYNAMIC_IP_PREF -m 10 -s -L "https://www.youtube.com")
+YT_GL=$(echo "$YT_HTML" | grep -o '"countryCode":"[A-Za-z]\{2\}"' | head -n 1 | cut -d'"' -f4 | tr 'a-z' 'A-Z')
+# 容灾：如果没有 countryCode，尝试退化抓取 GL 变量
+[ -z "$YT_GL" ] && YT_GL=$(echo "$YT_HTML" | grep -o '"GL":"[A-Za-z]\{2\}"' | head -n 1 | cut -d'"' -f4 | tr 'a-z' 'A-Z')
+
+# 综合判定逻辑：优先信任 Maps 雷达，YT 作为辅助补充
+REAL_REGION="${MAPS_GL:-$YT_GL}"
 
 if [ -z "$REAL_REGION" ]; then
     STATUS="🚨 探针失效 (网络阻断，或已被 Google 验证码/5秒盾拦截)"
@@ -189,13 +197,13 @@ else
     TARGET_CC="${REGION_CODE%%-*}"
     [ "$TARGET_CC" == "UK" ] && TARGET_CC="GB"
     
-    # 终极审判逻辑
-    if [ "$REAL_REGION" == "CN" ]; then
-        STATUS="❌ 严重高危！IP 已被 Google 判定为中国大陆 (送中)！"
+    # 终极审判：宁可错杀，不可放过！(任一雷达报警即判送中)
+    if [ "$MAPS_GL" == "CN" ] || [ "$YT_GL" == "CN" ]; then
+        STATUS="❌ 严重高危！双核雷达判定 IP 已被中国大陆锁定 (送中)！"
     elif [ "$REAL_REGION" == "$TARGET_CC" ]; then
-        STATUS="✅ 目标区域达成 (底层真实锚定: $REAL_REGION)"
+        STATUS="✅ 目标区域达成 (Maps: ${MAPS_GL:-无} | YT: ${YT_GL:-无})"
     else
-        STATUS="⚠️ 区域发生漂移！目标 $TARGET_CC，实际归属 $REAL_REGION (跨区送医/送美)"
+        STATUS="⚠️ 区域发生漂移！目标 $TARGET_CC，实际 (Maps: ${MAPS_GL:-无} | YT: ${YT_GL:-无})"
     fi
 fi
 
