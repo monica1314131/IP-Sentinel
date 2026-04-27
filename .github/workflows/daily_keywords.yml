@@ -2,8 +2,8 @@ name: Daily Data Factory
 
 on:
   schedule:
-    # 每天 UTC 18:00 (北京时间凌晨 02:00) 执行，赶在节点凌晨3点更新前造好子弹
-    - cron: '0 18 * * *'
+    # 每天 UTC 03:00 执行，为各节点全天随机拉取准备好弹药
+    - cron: '0 3 * * *'
   workflow_dispatch: 
 
 env:

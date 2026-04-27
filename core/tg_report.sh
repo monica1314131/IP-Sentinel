@@ -164,7 +164,7 @@ else
     MSG="$MSG
 
 🕒 **最近执行快照 [${LAST_MOD:-"System"}]:**
-时间: ${LAST_TIME:-"暂无数据"}
+时间: ${LAST_TIME:-"暂无数据"} (节点本地)
 结论: ${LAST_SCORE:-"暂无数据"}"
 
 fi
@@ -174,6 +174,8 @@ fi
 # ==========================================
 # 从配置文件提取当前本地版本，若无则默认为未知
 LOCAL_VER="${AGENT_VERSION:-未知}"
+# [时区对齐] 强制获取当前绝对 UTC 时间，作为全局统一的战报落款
+REPORT_UTC_TIME=$(date -u "+%Y-%m-%d %H:%M:%S UTC")
 
 # 极轻量级探针: 抓取 GitHub 云端的 version.txt (超时 3 秒，KV解析法)
 REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/main"
@@ -183,6 +185,7 @@ REMOTE_VER=$(curl -s -m 3 "${REPO_RAW_URL}/version.txt" | grep "^AGENT_VERSION="
 MSG="$MSG
 ----------------------------
 🛡️ **系统引擎状态**
+⏱️ 战报生成: \`${REPORT_UTC_TIME}\`
 当前运行版本: \`v${LOCAL_VER}\`"
 
 # 比对逻辑：如果成功抓到了远端版本，且和本地不一样

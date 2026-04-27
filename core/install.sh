@@ -667,8 +667,12 @@ fi
 # 7. 配置系统定时任务 (高频调度与看门狗)
 echo -e "\n[7/7] 正在注入系统守护进程与调度器..."
 
-# [v3.3.0 新增] 初始化 UA 指纹库更新时间戳，确立 30 天滚动周期的计算锚点
-echo $(date +%s) > "${INSTALL_DIR}/core/.ua_last_update"
+# [时钟同步核心] 获取部署时的绝对 UTC 时间锚点，用于打散全球节点的云端拉取并发
+DEPLOY_UTC_HOUR=$(date -u +%H)
+DEPLOY_UTC_MIN=$(date -u +%M)
+
+# [v3.3.0 新增] 初始化 UA 指纹库更新时间戳，确立 30 天滚动周期的计算锚点 (强制 UTC)
+echo $(date -u +%s) > "${INSTALL_DIR}/core/.ua_last_update"
 
 if command -v systemctl >/dev/null 2>&1; then
     echo "💡 检测到 Systemd 环境，正在部署原生守护服务..."
@@ -720,7 +724,8 @@ EOF
 [Unit]
 Description=Timer for IP-Sentinel Updater Service
 [Timer]
-OnCalendar=*-*-* 03:00:00
+# [绝对 UTC 锚点] 每天精确在部署的时刻触发，实现全球请求的天然削峰
+OnCalendar=*-*-* ${DEPLOY_UTC_HOUR}:${DEPLOY_UTC_MIN}:00 UTC
 Persistent=true
 Unit=ip-sentinel-updater.service
 [Install]
@@ -750,7 +755,8 @@ EOF
 [Unit]
 Description=Timer for IP-Sentinel Telegram Report Service
 [Timer]
-OnCalendar=*-*-* 08:00:00
+# [绝对 UTC 锚点] 全球统一：每天 UTC 16:00 准时向司令部发送战报
+OnCalendar=*-*-* 16:00:00 UTC
 Unit=ip-sentinel-report.service
 [Install]
 WantedBy=timers.target
@@ -809,18 +815,22 @@ EOF
             rm -f /tmp/cron_clean
 
             # 2. 写入我们的死循环守护进程
-            cat > ${INSTALL_DIR}/core/sentinel_scheduler.sh << 'EOF'
+            # [极客修复] 将 << 'EOF' 变为 << EOF，以允许在安装时将部署时刻的 DEPLOY_UTC 变量作为硬编码注入脚本中
+            cat > ${INSTALL_DIR}/core/sentinel_scheduler.sh << EOF
 #!/bin/bash
 while true; do
-    MIN=$(date +%M)
-    HOUR=$(date +%H)
-    if [ "$MIN" == "00" ] || [ "$MIN" == "30" ]; then
+    # 强制获取绝对 UTC 时分，免疫系统错误时区
+    MIN=\$(date -u +%M)
+    HOUR=\$(date -u +%H)
+    if [ "\$MIN" == "00" ] || [ "\$MIN" == "30" ]; then
         /bin/bash /opt/ip_sentinel/core/runner.sh >/dev/null 2>&1
     fi
-    if [ "$HOUR" == "03" ] && [ "$MIN" == "00" ]; then
+    # [绝对 UTC 锚点] 基于部署时刻的锚点触发热数据更新，天然并发削峰
+    if [ "\$HOUR" == "${DEPLOY_UTC_HOUR}" ] && [ "\$MIN" == "${DEPLOY_UTC_MIN}" ]; then
         /bin/bash /opt/ip_sentinel/core/updater.sh >/dev/null 2>&1
     fi
-    if [ "$HOUR" == "08" ] && [ "$MIN" == "00" ]; then
+    # [绝对 UTC 锚点] 统一 UTC 16:00 发送战报
+    if [ "\$HOUR" == "16" ] && [ "\$MIN" == "00" ]; then
         /bin/bash /opt/ip_sentinel/core/tg_report.sh >/dev/null 2>&1
     fi
     if ! pgrep -f 'webhook.py' >/dev/null; then
@@ -851,10 +861,12 @@ EOF
             # ==========================================
             crontab -l 2>/dev/null | grep -v "ip_sentinel" > /tmp/cron_backup || true
             echo "*/30 * * * * ${INSTALL_DIR}/core/runner.sh >/dev/null 2>&1" >> /tmp/cron_backup
-            echo "0 3 * * * ${INSTALL_DIR}/core/updater.sh >/dev/null 2>&1" >> /tmp/cron_backup
+            # [绝对 UTC 锚点] 每天精确在部署的 UTC 时刻触发
+            echo "${DEPLOY_UTC_MIN} ${DEPLOY_UTC_HOUR} * * * ${INSTALL_DIR}/core/updater.sh >/dev/null 2>&1" >> /tmp/cron_backup
             
             if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
-                echo "0 8 * * * ${INSTALL_DIR}/core/tg_report.sh >/dev/null 2>&1" >> /tmp/cron_backup
+                # [绝对 UTC 锚点] 统一 UTC 16:00
+                echo "0 16 * * * ${INSTALL_DIR}/core/tg_report.sh >/dev/null 2>&1" >> /tmp/cron_backup
                 echo "$SAFE_PUBLIC_IP" > "${INSTALL_DIR}/core/.last_ip"
                 
                 if command -v rc-update >/dev/null 2>&1 && [ -d "/etc/local.d" ]; then
