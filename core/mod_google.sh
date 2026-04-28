@@ -248,35 +248,41 @@ fi
 TARGET_CC="${REGION_CODE%%-*}"
 [ "$TARGET_CC" == "UK" ] && TARGET_CC="GB"
 
-# --- 终极审判逻辑 (严格一致性一票否决校验) ---
+# --- 终极审判逻辑 (以 YouTube 核心业务为主导，兼顾底层雷达权重) ---
 IS_CN=0
-IS_DRIFT=0
 VALID_PROBES=0
 
-check_region() {
-    local probe_val="$1"
-    if [ -n "$probe_val" ]; then
+# 1. 扫描所有探针，统计有效性并执行“送中”一票否决
+for val in "$JUMP_GL" "$YT_PR_GL" "$YT_MU_GL"; do
+    if [ -n "$val" ]; then
         ((VALID_PROBES++))
-        if [ "$probe_val" == "CN" ]; then
-            IS_CN=1
-        elif [ "$probe_val" != "$TARGET_CC" ]; then
-            IS_DRIFT=1
-        fi
+        [ "$val" == "CN" ] && IS_CN=1
     fi
-}
-
-check_region "$JUMP_GL"
-check_region "$YT_PR_GL"
-check_region "$YT_MU_GL"
+done
 
 if [ $VALID_PROBES -eq 0 ]; then
     STATUS="🚨 探针失效 (三核全部熔断，可能遭严重风控拦截)"
 elif [ $IS_CN -eq 1 ]; then
     STATUS="❌ 严重高危！三核雷达判定 IP 已被中国大陆锁定 (送中)！"
-elif [ $IS_DRIFT -eq 1 ]; then
-    STATUS="⚠️ 区域发生漂移！目标 $TARGET_CC，实际 (Jump: ${JUMP_GL:-无} | Prem: ${YT_PR_GL:-无} | Music: ${YT_MU_GL:-无})"
 else
-    STATUS="✅ 目标区域达成 (Jump: ${JUMP_GL:-无} | Prem: ${YT_PR_GL:-无} | Music: ${YT_MU_GL:-无})"
+    # 2. 评估核心流媒体业务是否达标 (只要 YT_PR 或 YT_MU 其一达标，即视为成功)
+    YT_MATCH=0
+    [ "$YT_PR_GL" == "$TARGET_CC" ] && YT_MATCH=1
+    [ "$YT_MU_GL" == "$TARGET_CC" ] && YT_MATCH=1
+
+    if [ $YT_MATCH -eq 1 ]; then
+        # 3. 核心业务达标，进一步评估底层路由权重
+        if [ -n "$JUMP_GL" ] && [ "$JUMP_GL" != "$TARGET_CC" ]; then
+            # YT 解锁了，但基础跳转 IP 库漂移了 (降级为 ✅，但备注底层漂移)
+            STATUS="✅ 目标区域达成 (YT主导成功, Jump副雷达漂移至 ${JUMP_GL}) | Prem: ${YT_PR_GL:-无} | Music: ${YT_MU_GL:-无}"
+        else
+            # 完美达成
+            STATUS="✅ 目标区域达成 (Jump: ${JUMP_GL:-无} | Prem: ${YT_PR_GL:-无} | Music: ${YT_MU_GL:-无})"
+        fi
+    else
+        # YouTube 流媒体核心未能解锁目标区域，宣判漂移
+        STATUS="⚠️ 区域发生漂移！目标 $TARGET_CC，实际 (Jump: ${JUMP_GL:-无} | Prem: ${YT_PR_GL:-无} | Music: ${YT_MU_GL:-无})"
+    fi
 fi
 
 log "$MODULE_NAME" "SCORE" "自检结论: $STATUS"
