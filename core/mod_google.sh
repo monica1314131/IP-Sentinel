@@ -171,42 +171,66 @@ for ((i=1; i<=TOTAL_ACTIONS; i++)); do
     fi
 done
 
-# --- [结果纠偏自检 (V4.0.8 终极版权雷达版: Premium + Music 双重穿透)] ---
-# 战术揭秘：彻底抛弃存在 CDN 缓存假象的首页与不稳定的 Maps 接口！
-# 全面换装 Google 旗下风控最严苛的两个独立版权业务：YouTube Premium 与 YouTube Music。
-# 移除会导致 CDN 误判的 Accept-Language 伪装，以裸奔姿态直面底层风控，绝不退而求其次去抓取假阳性的 GL 变量！
+# --- [结果纠偏自检 (V4.0.6 三核综合雷达版: URL跳转 + Premium + Music)] ---
+# 战术揭秘：汲取开源社区顶级探针的精髓！
+# 1. URL 传统跳转探测：探测 Google 原生域名的 301/302 重定向。
+# 2. YT Premium 深度探测：提取核心 contentRegion 变量，并强匹配 www.google.cn 送中特征。
 
-log "$MODULE_NAME" "INFO " "启动双核交叉验证 (YT Premium + YT Music) 穿透获取真实 GeoIP..."
+log "$MODULE_NAME" "INFO " "启动三核交叉验证 (URL跳转 + YT Premium + YT Music) 穿透获取 GeoIP..."
 
-# 核心 1: YouTube Premium 媒体版权风控探测 (极致裸奔，仅提取绝对核心的 countryCode)
+# 核心 1: 传统 URL 跳转探测 (捕捉底层重定向)
+JUMP_HDR=$(curl $CURL_BIND_OPT $DYNAMIC_IP_PREF -m 10 -sI "http://google.com/")
+JUMP_LOC=$(echo "$JUMP_HDR" | grep -i "^location:" | tr -d '\r\n')
+JUMP_GL=""
+if [[ "$JUMP_LOC" == *".google.cn"* ]] || [[ "$JUMP_LOC" == *"gl=CN"* ]]; then
+    JUMP_GL="CN"
+elif [[ "$JUMP_LOC" == *"gl="* ]]; then
+    JUMP_GL=$(echo "$JUMP_LOC" | grep -o 'gl=[A-Za-z]\{2\}' | head -n 1 | cut -d'=' -f2 | tr 'a-z' 'A-Z')
+else
+    # 尝试从后缀提取 (如 .co.jp -> JP, .com.hk -> HK, .de -> DE)
+    JUMP_EXT=$(echo "$JUMP_LOC" | awk -F'.google.' '{print $2}' | cut -d'/' -f1 | tr 'a-z' 'A-Z')
+    if [[ "$JUMP_EXT" == *"CN"* ]]; then JUMP_GL="CN"
+    elif [[ "$JUMP_EXT" == *"HK"* ]]; then JUMP_GL="HK"
+    elif [[ "$JUMP_EXT" == *"TW"* ]]; then JUMP_GL="TW"
+    elif [[ "$JUMP_EXT" == *"JP"* ]]; then JUMP_GL="JP"
+    elif [[ "$JUMP_EXT" == *"UK"* || "$JUMP_EXT" == *"GB"* ]]; then JUMP_GL="GB"
+    elif [[ "$JUMP_EXT" == "COM" ]]; then JUMP_GL="US"
+    else JUMP_GL=$(echo "$JUMP_EXT" | awk -F'.' '{print $NF}')
+    fi
+fi
+
+# 核心 2: YouTube Premium 探测 (结合深海声呐的 contentRegion 与强匹配逻辑)
+YT_PR_GL=""
 YT_PR_HTML=$(curl $CURL_BIND_OPT $DYNAMIC_IP_PREF -m 10 -s -L "https://www.youtube.com/premium")
-YT_PR_GL=$(echo "$YT_PR_HTML" | grep -o '"countryCode":"[^"]*"' | head -n 1 | cut -d'"' -f4 | tr 'a-z' 'A-Z')
+if echo "$YT_PR_HTML" | grep -q 'www.google.cn'; then
+    YT_PR_GL="CN"
+else
+    YT_PR_GL=$(echo "$YT_PR_HTML" | grep -o '"contentRegion":"[A-Za-z]\{2\}"' | head -n 1 | cut -d'"' -f4 | tr 'a-z' 'A-Z')
+    # 容灾兜底
+    [ -z "$YT_PR_GL" ] && YT_PR_GL=$(echo "$YT_PR_HTML" | grep -o '"countryCode":"[A-Za-z]\{2\}"' | head -n 1 | cut -d'"' -f4 | tr 'a-z' 'A-Z')
+fi
 
-# 核心 2: YouTube Music 独立版权风控探测
-# [修复] music 子域的前端框架无 countryCode 字段，且其 CDN 不存在主站的缓存污染，安全复用 GL 提取
+# 核心 3: YouTube Music 探测
 YT_MU_HTML=$(curl $CURL_BIND_OPT $DYNAMIC_IP_PREF -m 10 -s -L "https://music.youtube.com/")
 YT_MU_GL=$(echo "$YT_MU_HTML" | grep -o '"GL":"[A-Za-z]\{2\}"' | head -n 1 | cut -d'"' -f4 | tr 'a-z' 'A-Z')
 
-# [同步加固] 强化 Premium 探针的正则，防止匹配到冗余的非法长字符
-YT_PR_GL=$(echo "$YT_PR_HTML" | grep -o '"countryCode":"[A-Za-z]\{2\}"' | head -n 1 | cut -d'"' -f4 | tr 'a-z' 'A-Z')
-
-# 综合判定逻辑：优先信任 Premium，Music 作为辅助
-REAL_REGION="${YT_PR_GL:-$YT_MU_GL}"
+# 综合判定逻辑：优先信任 Premium，其次 Music，最后 URL 跳转兜底
+REAL_REGION="${YT_PR_GL:-${YT_MU_GL:-$JUMP_GL}}"
 
 if [ -z "$REAL_REGION" ]; then
-    STATUS="🚨 探针失效 (未获取到版权标识，可能被 5 秒盾或严重风控拦截)"
+    STATUS="🚨 探针失效 (三核全部熔断，可能遭严重风控拦截)"
 else
-    # [基准对齐] 提取配置大区 (兼容州级穿透，如 US-TX -> US)，并修正英国的 ISO 标准代码
+    # [基准对齐] 提取配置大区，并修正英国代码
     TARGET_CC="${REGION_CODE%%-*}"
     [ "$TARGET_CC" == "UK" ] && TARGET_CC="GB"
     
     # 终极审判：宁可错杀，不可放过！(任一雷达报警即判送中)
-    if [ "$YT_PR_GL" == "CN" ] || [ "$YT_MU_GL" == "CN" ]; then
-        STATUS="❌ 严重高危！版权雷达判定 IP 已被中国大陆锁定 (送中)！"
+    if [ "$YT_PR_GL" == "CN" ] || [ "$YT_MU_GL" == "CN" ] || [ "$JUMP_GL" == "CN" ]; then
+        STATUS="❌ 严重高危！三核雷达判定 IP 已被中国大陆锁定 (送中)！"
     elif [ "$REAL_REGION" == "$TARGET_CC" ]; then
-        STATUS="✅ 目标区域达成 (Premium: ${YT_PR_GL:-无} | Music: ${YT_MU_GL:-无})"
+        STATUS="✅ 目标区域达成 (Jump: ${JUMP_GL:-无} | Prem: ${YT_PR_GL:-无} | Music: ${YT_MU_GL:-无})"
     else
-        STATUS="⚠️ 区域发生漂移！目标 $TARGET_CC，实际 (Premium: ${YT_PR_GL:-无} | Music: ${YT_MU_GL:-无})"
+        STATUS="⚠️ 区域发生漂移！目标 $TARGET_CC，实际 (Jump: ${JUMP_GL:-无} | Prem: ${YT_PR_GL:-无} | Music: ${YT_MU_GL:-无})"
     fi
 fi
 
