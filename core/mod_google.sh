@@ -162,10 +162,10 @@ for ((i=1; i<=TOTAL_ACTIONS; i++)); do
     
     log "$MODULE_NAME" "EXEC " "动作[$i/$TOTAL_ACTIONS]完成 | HTTP状态: $CODE | 抖动坐标: $ACTION_LAT, $ACTION_LON"
     
-    # 【核心升级】行为拉伸：每次动作后强制休眠 90 - 150 秒
-    # 结合动作总数，总耗时将稳定在 10 分钟 到 25 分钟之间
+    # 【核心升级】行为拉伸：每次动作后强制休眠 90 - 120 秒
+    # 结合动作总数，总耗时将稳定在 10 分钟 到 20 分钟之间
     if [ $i -lt $TOTAL_ACTIONS ]; then
-        SLEEP_TIME=$((90 + RANDOM % 61))
+        SLEEP_TIME=$((90 + RANDOM % 31))
         log "$MODULE_NAME" "WAIT " "阅读当前页面内容，模拟停留 $SLEEP_TIME 秒..."
         sleep $SLEEP_TIME
     fi
