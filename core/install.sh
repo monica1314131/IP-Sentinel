@@ -660,6 +660,8 @@ pkill -9 -f "webhook.py" >/dev/null 2>&1 || true
 pkill -9 -f "agent_daemon.sh" >/dev/null 2>&1 || true
 pkill -9 -f "runner.sh" >/dev/null 2>&1 || true
 pkill -9 -f "tg_report.sh" >/dev/null 2>&1 || true
+pkill -9 -f "updater.sh" >/dev/null 2>&1 || true
+pkill -9 -f "sentinel_scheduler.sh" >/dev/null 2>&1 || true
 
 # 执行代码目录的物理替换
 rm -rf "${INSTALL_DIR}/core" 2>/dev/null

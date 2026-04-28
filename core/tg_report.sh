@@ -18,6 +18,22 @@ if [ -z "$TG_TOKEN" ] || [ -z "$CHAT_ID" ]; then
     exit 0
 fi
 
+# ================== [v4.0.8 核心: 防并发风暴与 60 秒冷却机制] ==================
+LOCK_FILE="${INSTALL_DIR}/core/.report_lock"
+if [ -f "$LOCK_FILE" ]; then
+    LAST_RUN=$(cat "$LOCK_FILE" 2>/dev/null)
+    NOW=$(date +%s)
+    # 校验 LAST_RUN 是否为有效数字，并比对 60 秒冷却期
+    if [[ "$LAST_RUN" =~ ^[0-9]+$ ]]; then
+        if [ $((NOW - LAST_RUN)) -lt 60 ]; then
+            echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] [v${AGENT_VERSION:-未知}] [WARN ] [Report ] [SYSTEM] ⚠️ 战报请求过于频繁，触发 60 秒防并发风暴拦截。" >> "${INSTALL_DIR}/logs/sentinel.log"
+            exit 0
+        fi
+    fi
+fi
+echo $(date +%s) > "$LOCK_FILE"
+# ==============================================================================
+
 # 2. 节点元数据抓取 (v3.2.2 协议自适应与多级容灾版)
 # [v3.5.2 核心: 引入双轨身份架构]
 if [ -z "$NODE_NAME" ]; then
