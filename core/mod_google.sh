@@ -171,23 +171,29 @@ for ((i=1; i<=TOTAL_ACTIONS; i++)); do
     fi
 done
 
-# --- [结果纠偏自检 (V4.0.6 综合雷达版: 双核交叉验证)] ---
-# 战术揭秘：彻底抛弃单点依赖！结合 Google Maps 极度严格的法律测绘边界重定向，
-# 以及 YouTube 媒体版权风控底层变量，进行多维度综合宣判。
+# --- [结果纠偏自检 (V4.0.7 终极真理版: Premium穿透 + 双栈法律边界)] ---
+# 战术揭秘：彻底抛弃单点依赖！
+# 1. Google 首页存在严重的 CDN 缓存假象，送中 IP 经常虚假返回 US。必须强拉 /premium 页面！
+# 2. 纯 IPv6 机器可能无法解析 googleusercontent，必须引入 policies.google.com 作为法律边界兜底！
 
-log "$MODULE_NAME" "INFO " "启动双核交叉验证 (Google Maps + YouTube) 穿透获取真实 GeoIP..."
+log "$MODULE_NAME" "INFO " "启动双核交叉验证 (Google 法律边界 + YouTube Premium) 穿透获取真实 GeoIP..."
 
-# 核心 1: Google Maps 法律边界重定向探测 (提取 Header 里的 gl=XX 参数)
+# 核心 1: Google 法律边界重定向探测 (兼容纯 IPv6 双栈寻路)
 MAPS_HDR=$(curl $CURL_BIND_OPT $DYNAMIC_IP_PREF -m 10 -sI "https://www.google.com/maps")
 MAPS_GL=$(echo "$MAPS_HDR" | grep -i "^location:" | grep -o 'gl=[A-Za-z]\{2\}' | head -n 1 | cut -d'=' -f2 | tr 'a-z' 'A-Z')
+# 容灾：纯 IPv6 机器若查不到，降级走官方用户协议接口 (100% 存在且强制支持 V6 节点)
+if [ -z "$MAPS_GL" ]; then
+    POL_HDR=$(curl $CURL_BIND_OPT $DYNAMIC_IP_PREF -m 10 -sI "https://policies.google.com/terms")
+    MAPS_GL=$(echo "$POL_HDR" | grep -i "^location:" | grep -o 'gl=[A-Za-z]\{2\}' | head -n 1 | cut -d'=' -f2 | tr 'a-z' 'A-Z')
+fi
 
-# 核心 2: YouTube 媒体版权风控探测 (提取最深层的 countryCode)
-YT_HTML=$(curl $CURL_BIND_OPT $DYNAMIC_IP_PREF -m 10 -s -L "https://www.youtube.com")
+# 核心 2: YouTube Premium 媒体版权风控探测 (提取最深层的 countryCode，无视首页缓存)
+YT_HTML=$(curl $CURL_BIND_OPT $DYNAMIC_IP_PREF -m 10 -s -L -H "Accept-Language: en-US,en;q=0.9" "https://www.youtube.com/premium")
 YT_GL=$(echo "$YT_HTML" | grep -o '"countryCode":"[A-Za-z]\{2\}"' | head -n 1 | cut -d'"' -f4 | tr 'a-z' 'A-Z')
 # 容灾：如果没有 countryCode，尝试退化抓取 GL 变量
 [ -z "$YT_GL" ] && YT_GL=$(echo "$YT_HTML" | grep -o '"GL":"[A-Za-z]\{2\}"' | head -n 1 | cut -d'"' -f4 | tr 'a-z' 'A-Z')
 
-# 综合判定逻辑：优先信任 Maps 雷达，YT 作为辅助补充
+# 综合判定逻辑：优先信任边界雷达，YT 作为辅助补充
 REAL_REGION="${MAPS_GL:-$YT_GL}"
 
 if [ -z "$REAL_REGION" ]; then
