@@ -139,10 +139,15 @@ fi
 # ==========================================================
 TMP_PROBE="/tmp/ip_sentinel_probe.sh"
 $CURL_CMD "https://raw.githubusercontent.com/xykt/IPQuality/main/ip.sh" -o "$TMP_PROBE"
-if [ -s "$TMP_PROBE" ]; then
+
+# 🛡️ 供应链防毒：验证脚本内是否包含原作者特有签名，防止被墙重定向为 HTML
+if [ -s "$TMP_PROBE" ] && grep -q "xykt" "$TMP_PROBE" 2>/dev/null; then
     mv "$TMP_PROBE" "${INSTALL_DIR}/core/ip_probe.sh"
     chmod +x "${INSTALL_DIR}/core/ip_probe.sh"
     log "Updater" "INFO " "✅ 深海声呐底层探针 (ip_probe.sh) 源文件安全对齐"
+else
+    log "Updater" "WARN " "❌ 探针源文件拉取受损或遭投毒劫持，已触发防砖机制，保留本地旧版本"
+    rm -f "$TMP_PROBE" 2>/dev/null
 fi
 
 # ==========================================================
