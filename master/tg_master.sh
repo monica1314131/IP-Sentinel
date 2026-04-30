@@ -160,11 +160,11 @@ while true; do
                             -d "show_alert=false" > /dev/null
                     fi
 
-                    # 2. 无损修改原消息：移除入库按钮，展示绿勾状态 (防连点机制生效)
+                    # 2. 无损修改原消息：移除入库按钮展示绿勾状态，并保留返回控制台按钮 (体验优化)
                     if [ -n "$MSG_ID" ]; then
                         curl -s --connect-timeout 5 -m 10 -X POST "https://api.telegram.org/bot${TG_TOKEN}/editMessageReplyMarkup" \
                             -H "Content-Type: application/json" \
-                            -d "{\"chat_id\":\"${CHAT_ID}\",\"message_id\":\"${MSG_ID}\",\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"✅ 此报告已存档\",\"callback_data\":\"ignore\"}]]}}" > /dev/null
+                            -d "{\"chat_id\":\"${CHAT_ID}\",\"message_id\":\"${MSG_ID}\",\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"✅ 此报告已存档\",\"callback_data\":\"ignore\"}],[{\"text\":\"⚙️ 调出该节点控制台\",\"callback_data\":\"manage:${NODE_ID}\"}]]}}" > /dev/null
                     fi
                 else
                     # [异常兜底] 弹出红色警告弹窗
