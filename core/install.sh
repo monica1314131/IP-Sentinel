@@ -29,7 +29,7 @@ CONFIG_FILE="${INSTALL_DIR}/config.conf"
 # [修复] 增加 -L 与双栈容灾 (-4)，解决纯 V6 或 V6 优先机器连接 GitHub Raw 易超时的问题
 TARGET_VERSION=$( (curl -sL -m 5 "${REPO_RAW_URL}/version.txt" || curl -4 -sL -m 5 "${REPO_RAW_URL}/version.txt") 2>/dev/null | grep "^AGENT_VERSION=" | cut -d'=' -f2 | tr -d '[:space:]')
 # 🛡️ 兜底防线：如果网络波动拉取失败，启用内置的安全兜底版本
-TARGET_VERSION=${TARGET_VERSION:-"4.0.0"}
+TARGET_VERSION=${TARGET_VERSION:-"4.0.6"}
 
 # 轻量级版本号比对函数 (例如: version_lt "3.3.1" "3.4.0" 返回 true)
 version_lt() {

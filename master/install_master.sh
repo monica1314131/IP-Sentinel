@@ -29,7 +29,7 @@ REPO_RAW_URL="https://raw.githubusercontent.com/hotyue/IP-Sentinel/main"
 TARGET_VERSION=$( (curl -sL -m 5 "${REPO_RAW_URL}/version.txt" || curl -4 -sL -m 5 "${REPO_RAW_URL}/version.txt") 2>/dev/null | grep "^MASTER_VERSION=" | cut -d'=' -f2 | tr -d '[:space:]')
 
 # 🛡️ 兜底防线：如果网络波动拉取失败，启用内置的最新兜底版本
-TARGET_VERSION=${TARGET_VERSION:-"4.0.0"}
+TARGET_VERSION=${TARGET_VERSION:-"4.0.7"}
 
 MASTER_DIR="/opt/ip_sentinel_master"
 DB_FILE="${MASTER_DIR}/sentinel.db"
