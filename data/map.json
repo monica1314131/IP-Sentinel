@@ -140,6 +140,23 @@
             } 
           ] 
         },
+        { 
+          "id": "IN", 
+          "name": "India (印度)", 
+          "keyword_file": "kw_IN.txt", 
+          "states": [
+            { 
+              "id": "Default", 
+              "name": "Default State", 
+              "cities": [
+                { 
+                  "id": "Delhi", 
+                  "name": "Delhi (新德里)" 
+                } 
+              ] 
+            } 
+          ] 
+        },
         {
           "id": "KR",
           "name": "South Korea (韩国)",
