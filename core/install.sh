@@ -497,18 +497,18 @@ if [ "$UPGRADE_MODE" == "false" ]; then
     
     # 注入次发弹药 (可用 IPv4)
     if [[ -n "$DETECT_V4" ]] && [[ "$DETECT_V4" != "$PUBLIC_IP" ]]; then
-        COMM_IP="${COMM_IP},${DETECT_V4}"
+        COMM_IP="${COMM_IP}_${DETECT_V4}"
     fi
     
     # 注入保底弹药 (可用 IPv6，带括号保护)
     if [[ -n "$DETECT_V6" ]] && [[ "$DETECT_V6" != "$PUBLIC_IP" ]]; then
         [[ "$DETECT_V6" != *"["* ]] && SAFE_V6="[${DETECT_V6}]" || SAFE_V6="$DETECT_V6"
-        COMM_IP="${COMM_IP},${SAFE_V6}"
+        COMM_IP="${COMM_IP}_${SAFE_V6}"
     fi
     
     SAFE_COMM_IP="$COMM_IP"
     
-    if [[ "$COMM_IP" == *","* ]]; then
+    if [[ "$COMM_IP" == *"_"* ]]; then
         echo -e " \033[32m✅ 成功组装多宿主容灾通讯专线: $SAFE_COMM_IP\033[0m"
     else
         echo -e " \033[33m⚠️ 本机仅有单一出口，建立单轨通讯模式: $SAFE_COMM_IP\033[0m"
@@ -659,14 +659,14 @@ if [ "$UPGRADE_MODE" == "true" ]; then
     
     # 追加 V4 容灾备弹
     if [[ -n "$RAW_V4" ]] && [[ "$NEW_COMM_IP" != *"$RAW_V4"* ]]; then
-        NEW_COMM_IP="${NEW_COMM_IP},${RAW_V4}"
+        NEW_COMM_IP="${NEW_COMM_IP}_${RAW_V4}"
     fi
     
     # 追加 V6 容灾备弹
     if [[ -n "$RAW_V6" ]]; then
         [[ "$RAW_V6" != *"["* ]] && SAFE_V6="[${RAW_V6}]" || SAFE_V6="$RAW_V6"
         if [[ "$NEW_COMM_IP" != *"$SAFE_V6"* ]]; then
-            NEW_COMM_IP="${NEW_COMM_IP},${SAFE_V6}"
+            NEW_COMM_IP="${NEW_COMM_IP}_${SAFE_V6}"
         fi
     fi
     
