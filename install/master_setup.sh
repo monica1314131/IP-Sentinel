@@ -149,7 +149,10 @@ do_master_config() {
         read -p "请输入中枢展示别名 (如'美西主控机', 回车使用默认): " CUSTOM_MASTER_ALIAS
 
         if [ -n "$CUSTOM_MASTER_ALIAS" ]; then
-            MASTER_NODE_NAME=$(echo "$CUSTOM_MASTER_ALIAS" | tr -d '"'\''\`\$\|&;<>\n\r' | cut -c 1-20)
+            # 强制声明 UTF-8 环境，丢弃危险的 cut -c 字节切分，改用 Bash 原生字符切片防御中文乱码
+            export LC_ALL=C.UTF-8 2>/dev/null || export LC_ALL=en_US.UTF-8 2>/dev/null || true
+            CLEAN_ALIAS=$(echo "$CUSTOM_MASTER_ALIAS" | tr -d '"'\''\`\$\|&;<>\n\r')
+            MASTER_NODE_NAME="${CLEAN_ALIAS:0:20}"
             [ -z "$MASTER_NODE_NAME" ] && MASTER_NODE_NAME="$MASTER_NODE"
         else
             MASTER_NODE_NAME="$MASTER_NODE"
