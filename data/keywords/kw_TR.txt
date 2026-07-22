@@ -1,3 +1,13 @@
+windy
+openai
+faruk çelik
+türkiye
+турция
+taksi
+teşvik
+denizli hava durumu
+sozcu
+masterchef 5 yarışmacı kim oldu
 bayburt
 nokia 300
 pmyo başvuru
@@ -38,7 +48,6 @@ cumhurbaşkanı
 izmir
 elazığ deprem
 a haber canlı
-türkiye
 gençlik ve spor bakanlığı
 mazot fiyatı
 oguzhan ugur
@@ -68,7 +77,6 @@ var mısın yok musun esra erol hakan
 kaan ayhan
 hüseyin çelik
 inegöl hava durumu
-sozcu
 hava
 ankara hava durumu
 bolu hava durumu
@@ -90,11 +98,3 @@ otomobil
 wm spielplan
 istanbul büyükşehir belediye meclisi
 kıbrıs
-aselsan
-dünya kupası maçları
-lionel messi
-чемпионат мира по футболу fifa 2026™
-çankaya belediye başkanı
-kia
-halk tv canlı
-açığa satış
