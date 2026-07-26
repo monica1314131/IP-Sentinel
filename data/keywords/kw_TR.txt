@@ -1,9 +1,18 @@
+amasya
+ekonomi
+m
+csd berlin 2026
+sinop hava durumu
+son dakika
+wetter
+pogoda
+tokat hava durumu
+weer
 yükseköğretim kurulu
 banka
 esra dermancıoğlu
 zonguldak hava durumu
 adıyaman hava durumu
-sinop hava durumu
 adana
 emekli maaş farkları ne zaman yatacak 2026 temmuz
 ankara elektrik kesintisi
@@ -15,7 +24,6 @@ konya hava durumu
 kırıkkale hava durumu
 mersin hava durumu
 cilia flores
-weer
 eskişehir hava durumu
 düzce hava durumu
 enver altaylı
@@ -58,7 +66,6 @@ fanatik
 francja anglia
 promosyon
 elektrik kesintisi
-pogoda
 hürriyet
 didem arslan yılmaz
 polis
@@ -91,10 +98,3 @@ haber7
 sözcü gazetesi
 van haber
 ags sınav yerleri
-rafael leão
-yargıtay
-adem yeşilyurt
-kocaeli
-voleybol
-giresun hava durumu
-wetter
