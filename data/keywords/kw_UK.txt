@@ -1,3 +1,13 @@
+hotels
+flights
+concerts
+travel
+games
+sports
+zilla fatu
+mcdonald's
+delivery
+fitness
 elina svitolina
 funeral director
 getty images
@@ -10,15 +20,12 @@ islam makhachev
 cadbury treasure hunt gold egg
 solar eclipses glasses
 three
-flights
-games
 events
 vanguard
 house of the dragon
 alexandra eala
 naomi osaka
 flamengo vs vitória
-travel
 schools
 swimming
 jobs
@@ -29,7 +36,6 @@ inter miami vs c.f. monterrey standings
 artificial intelligence news
 ronaldo
 cycling
-concerts
 music
 liverpool transfer news fabrizio romano
 movies
@@ -70,7 +76,6 @@ forest
 jordan salinas
 hunter green
 brent crude price
-delivery
 marc warren van der valk season 4
 house of the dragon season 3
 tv licence
@@ -93,8 +98,3 @@ haku
 uk 35c temperature forecast
 house flies
 man city
-satellite imagery
-sony playstation disc future
-baresi
-liam delap
-product recall
