@@ -1,13 +1,19 @@
 hotels
+fitness
+meditation
+sports
+travel
+natalie harp
+swimming
+movies
+coco gauff
+cruzeiro vs flamengo
 flights
 concerts
-travel
 games
-sports
 zilla fatu
 mcdonald's
 delivery
-fitness
 elina svitolina
 funeral director
 getty images
@@ -27,7 +33,6 @@ alexandra eala
 naomi osaka
 flamengo vs vitória
 schools
-swimming
 jobs
 coffee
 the financial times
@@ -38,7 +43,6 @@ ronaldo
 cycling
 music
 liverpool transfer news fabrizio romano
-movies
 twitch
 chicago vs necaxa
 wnba
@@ -94,7 +98,3 @@ dodgers vs red sox
 fire vs fever
 sid wilson
 cyclospora outbreak uk
-haku
-uk 35c temperature forecast
-house flies
-man city
